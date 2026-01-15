@@ -10,17 +10,28 @@ from taskdantic.models import Task
 
 
 def parse_task_export(json_output: str) -> list[Task]:
-    """Parse JSON output from 'task export' command into Task objects."""
+    """Parse JSON output from 'task export' command into Task objects.
+
+    Args:
+        json_output: JSON string from task export command
+
+    Returns:
+        List of Task objects
+
+    Raises:
+        ValueError: If JSON is invalid or not an array
+        ValidationError: If task validation fails
+    """
     if not json_output or json_output.strip() == "":
         return []
 
     try:
         data = json.loads(json_output)
     except json.JSONDecodeError as e:
-        raise ValidationError(f"Invalid JSON from task export: {e}") from e
+        raise ValueError(f"Invalid JSON from task export: {e}") from e
 
     if not isinstance(data, list):
-        raise ValidationError("Expected JSON array from task export")
+        raise ValueError("Expected JSON array from task export")
 
     tasks = []
     for item in data:

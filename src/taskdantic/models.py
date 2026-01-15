@@ -215,16 +215,28 @@ class TaskConfig(BaseModel):
             return cls()
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Get a config value by key.
+        """Get a config value by key using dot notation.
 
         Args:
-            key: Config key (e.g., "data.location")
+            key: Config key with dot notation (e.g., "data.location", "color.active")
             default: Default value if key not found
 
         Returns:
             Config value or default
+
+        Examples:
+            config.get("data.location") -> "/home/user/.task"
+            config.get("report.next.filter") -> "status:pending -WAITING"
         """
-        return self.config.get(key, default)
+        parts = key.split(".")
+        current = self.config
+
+        for part in parts:
+            if not isinstance(current, dict) or part not in current:
+                return default
+            current = current[part]
+
+        return current
 
     def get_udas(self) -> dict[str, dict[str, Any]]:
         """Get all UDA definitions as a dict.
