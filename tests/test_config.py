@@ -1,11 +1,12 @@
-# tests/unit/test_config.py
+# tests/test_config.py
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from taskdantic.config import TaskConfig
+from taskdantic.config_models import TaskConfig
 
 
 @pytest.mark.unit
@@ -15,7 +16,8 @@ class TestTaskConfig:
     def test_parse_nonexistent_file(self) -> None:
         """Test parsing non-existent config file returns empty config."""
         config = TaskConfig.from_file("/nonexistent/path/.taskrc")
-        assert config.config == {}
+        assert config.values == {}
+        assert config.options == []
 
     def test_parse_empty_file(self, temp_dir: Path) -> None:
         """Test parsing empty config file."""
@@ -23,7 +25,8 @@ class TestTaskConfig:
         config_file.write_text("")
 
         config = TaskConfig.from_file(str(config_file))
-        assert config.config == {}
+        assert config.values == {}
+        assert config.options == []
 
     def test_parse_simple_config(self, temp_dir: Path) -> None:
         """Test parsing simple config file."""
@@ -36,9 +39,9 @@ verbose=yes
         config_file.write_text(config_content.strip())
 
         config = TaskConfig.from_file(str(config_file))
-        assert config.config["data.location"] == "/home/user/.task"
-        assert config.config["confirmation"] == "off"
-        assert config.config["verbose"] == "yes"
+        assert config.get("data.location") == "/home/user/.task"
+        assert config.get("confirmation") == "off"
+        assert config.get("verbose") == "yes"
 
     def test_parse_config_with_comments(self, temp_dir: Path) -> None:
         """Test that comments are ignored."""
@@ -52,8 +55,8 @@ confirmation=off
         config_file.write_text(config_content.strip())
 
         config = TaskConfig.from_file(str(config_file))
-        assert len(config.config) == 2
-        assert config.config["data.location"] == "/home/user/.task"
+        assert len(config.options) == 2
+        assert config.get("data.location") == "/home/user/.task"
 
     def test_parse_config_with_equals_in_value(self, temp_dir: Path) -> None:
         """Test parsing config with equals sign in value."""
@@ -62,7 +65,7 @@ confirmation=off
         config_file.write_text(config_content)
 
         config = TaskConfig.from_file(str(config_file))
-        assert config.config["report.next.filter"] == "status:pending priority:H"
+        assert config.get("report.next.filter") == "status:pending priority:H"
 
     def test_parse_config_with_empty_value(self, temp_dir: Path) -> None:
         """Test parsing config with empty value."""
@@ -71,7 +74,7 @@ confirmation=off
         config_file.write_text(config_content)
 
         config = TaskConfig.from_file(str(config_file))
-        assert config.config["context"] == ""
+        assert config.get("context") == ""
 
     def test_parse_config_with_spaces(self, temp_dir: Path) -> None:
         """Test parsing config with spaces around equals."""
@@ -84,9 +87,9 @@ key3 =value3
         config_file.write_text(config_content.strip())
 
         config = TaskConfig.from_file(str(config_file))
-        assert config.config["key1"] == "value1"
-        assert config.config["key2"] == "value2"
-        assert config.config["key3"] == "value3"
+        assert config.get("key1") == "value1"
+        assert config.get("key2") == "value2"
+        assert config.get("key3") == "value3"
 
     def test_parse_uda_definitions(self, temp_dir: Path) -> None:
         """Test parsing UDA definitions."""
@@ -151,8 +154,8 @@ color.overdue=rgb500
         config_file.write_text(config_content.strip())
 
         config = TaskConfig.from_file(str(config_file))
-        assert config.config["color.active"] == "rgb555 on rgb410"
-        assert config.config["color.due"] == "rgb550"
+        assert config.get("color.active") == "rgb555 on rgb410"
+        assert config.get("color.due") == "rgb550"
 
     def test_parse_report_config(self, temp_dir: Path) -> None:
         """Test parsing report configuration."""
@@ -165,9 +168,8 @@ report.next.filter=status:pending -WAITING
         config_file.write_text(config_content.strip())
 
         config = TaskConfig.from_file(str(config_file))
-        assert "report.next.columns" in config.config
-        assert "report.next.filter" in config.config
-        assert config.config["report.next.filter"] == "status:pending -WAITING"
+        assert config.get("report.next.columns") is not None
+        assert config.get("report.next.filter") == "status:pending -WAITING"
 
     def test_malformed_line_ignored(self, temp_dir: Path) -> None:
         """Test that malformed lines are ignored."""
@@ -180,6 +182,6 @@ confirmation=off
         config_file.write_text(config_content.strip())
 
         config = TaskConfig.from_file(str(config_file))
-        assert len(config.config) == 2
-        assert "data.location" in config.config
-        assert "confirmation" in config.config
+        assert len(config.options) == 2
+        assert config.get("data.location") == "/home/user/.task"
+        assert config.get("confirmation") == "off"

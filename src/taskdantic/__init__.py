@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from taskdantic.config import TaskRcParser
+from taskdantic.config_writer import TaskRcWriter, create_default_yaml
 from taskdantic.exceptions import (
     ConfigError,
     TaskNotFoundError,
@@ -24,7 +24,7 @@ __all__ = [
     "Task",
     "TaskConfig",
     "TaskNotFoundError",
-    "TaskRcParser",
+    "TaskRcWriter",
     "TaskStatus",
     "TaskWarrior",
     "TaskWarriorCommandError",
@@ -32,4 +32,5 @@ __all__ = [
     "TaskWarriorNotInstalledError",
     "UDADefinition",
     "ValidationError",
+    "create_default_yaml",
 ]
