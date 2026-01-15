@@ -2,12 +2,12 @@
 
 {
   # https://devenv.sh/basics/
-  env.GREET = "devenv";
+  env.GREET = "taskdantic";
 
   # https://devenv.sh/packages/
-  packages = [ 
-    pkgs.git 
-    pkgs.uv
+  packages = with pkgs; [ 
+    git 
+    uv
     ];
 
   # https://devenv.sh/languages/
@@ -30,11 +30,13 @@
   # https://devenv.sh/scripts/
   scripts.hello.exec = ''
     echo hello from $GREET
+    echo
   '';
 
   enterShell = ''
     hello
     git --version
+    echo
   '';
 
   # https://devenv.sh/tasks/

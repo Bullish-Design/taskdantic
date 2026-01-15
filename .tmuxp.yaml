@@ -1,16 +1,16 @@
-session_name: Template-Py
+session_name: Taskdantic
 windows:
-  - window_name: Template-Py
+  - window_name: Taskdantic
     layout: main-vertical
     options:
       main-pane-width: 20%
     panes:
       - shell_command:
-          - cd ~/Documents/Notes/Projects/template-py
+          - cd ~/Documents/Notes/Projects/taskdantic
           # - nvim Notes.md ToDo.md
           - open-project
       - shell_command:
           - tmux resizep -y 85%
-          - filelist-open "startup_files.txt" template-py
+          - filelist-open "startup_files.txt" taskdantic
         focus: true
       - clear
