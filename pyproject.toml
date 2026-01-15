@@ -47,6 +47,11 @@ addopts = [
     "--strict-markers",
     "--strict-config",
 ]
+markers = [
+    "unit: Unit tests (no Taskwarrior required)",
+    "integration: Integration tests (requires Taskwarrior)",
+    "slow: Slow-running tests",
+]
 
 [tool.mypy]
 python_version = "3.11"

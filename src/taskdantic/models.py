@@ -8,13 +8,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
-from taskdantic.types import Priority, TaskStatus
-from taskdantic.utils import (
+from taskdantic.serializers import (
     duration_serializer,
     duration_validator,
     taskwarrior_datetime_serializer,
     taskwarrior_datetime_validator,
 )
+from taskdantic.types import Priority, TaskStatus
 
 
 class Annotation(BaseModel):
@@ -82,6 +82,14 @@ class Task(BaseModel):
     # Computed (read-only)
     urgency: Optional[float] = Field(None, exclude=True)
 
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        """Validate that description is not empty."""
+        if not value or not value.strip():
+            raise ValueError("Description cannot be empty")
+        return value
+
     @field_validator(
         "entry",
         "modified",
@@ -107,6 +115,7 @@ class Task(BaseModel):
         "until",
         "wait",
         "scheduled",
+        when_used="json",
     )
     def serialize_datetime(self, value: Optional[datetime]) -> Optional[str]:
         """Serialize datetime fields to Taskwarrior format."""
@@ -118,7 +127,7 @@ class Task(BaseModel):
         """Validate and parse recur field."""
         return duration_validator(value)
 
-    @field_serializer("recur")
+    @field_serializer("recur", when_used="json")
     def serialize_recur(self, value: Optional[timedelta]) -> Optional[str]:
         """Serialize recur to Taskwarrior duration format."""
         return duration_serializer(value)
@@ -137,19 +146,19 @@ class Task(BaseModel):
             return [UUID(value)]
         raise TypeError(f"Expected list or str for depends, got {type(value)}")
 
-    @field_serializer("depends")
+    @field_serializer("depends", when_used="json")
     def serialize_depends(self, value: list[UUID]) -> Optional[str]:
         """Serialize depends as comma-separated UUIDs."""
         if not value:
             return None
         return ",".join(str(uuid) for uuid in value)
 
-    @field_serializer("uuid", "parent")
+    @field_serializer("uuid", "parent", when_used="json")
     def serialize_uuid(self, value: Optional[UUID]) -> Optional[str]:
         """Serialize UUID fields to string."""
         return str(value) if value else None
 
-    @field_serializer("tags")
+    @field_serializer("tags", when_used="json")
     def serialize_tags(self, value: list[str]) -> Optional[list[str]]:
         """Serialize tags, return None if empty."""
         return value if value else None
@@ -182,3 +191,53 @@ class TaskConfig(BaseModel):
         extra="allow",
         populate_by_name=True,
     )
+
+    @classmethod
+    def from_file(cls, path: str) -> TaskConfig:
+        """Load TaskConfig from a .taskrc file.
+
+        Args:
+            path: Path to the .taskrc file
+
+        Returns:
+            TaskConfig instance
+        """
+        from pathlib import Path
+
+        from taskdantic.config import TaskRcParser
+        from taskdantic.exceptions import ConfigError
+
+        try:
+            parser = TaskRcParser(Path(path))
+            return parser.parse()
+        except ConfigError:
+            # Return empty config if file doesn't exist or can't be read
+            return cls()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get a config value by key.
+
+        Args:
+            key: Config key (e.g., "data.location")
+            default: Default value if key not found
+
+        Returns:
+            Config value or default
+        """
+        return self.config.get(key, default)
+
+    def get_udas(self) -> dict[str, dict[str, Any]]:
+        """Get all UDA definitions as a dict.
+
+        Returns:
+            Dictionary of UDA definitions
+        """
+        result: dict[str, dict[str, Any]] = {}
+        for name, uda_def in self.udas.items():
+            result[name] = {
+                "type": uda_def.type,
+                "label": uda_def.label,
+            }
+            if uda_def.values:
+                result[name]["values"] = ",".join(uda_def.values)
+        return result
