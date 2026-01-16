@@ -1,31 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from taskdantic.enums import Priority, Status
-from taskdantic.utils import datetime_to_taskwarrior, taskwarrior_to_datetime
+
+# from taskdantic.utils import datetime_to_taskwarrior, taskwarrior_to_datetime
+from taskdantic.types import TWDatetime, UUIDList
 
 
 class Annotation(BaseModel):
-    """Task annotation with timestamp and description."""
-
-    entry: datetime
+    entry: TWDatetime
     description: str
-
-    @field_validator("entry", mode="before")
-    @classmethod
-    def parse_entry(cls, value: str | datetime) -> datetime:
-        if isinstance(value, str):
-            return taskwarrior_to_datetime(value)
-        return value
-
-    @field_serializer("entry")
-    def serialize_entry(self, value: datetime) -> str:
-        return datetime_to_taskwarrior(value)
 
 
 class Task(BaseModel):
@@ -59,22 +48,26 @@ class Task(BaseModel):
     description: str
     status: Status = Status.PENDING
 
-    entry: datetime = Field(default_factory=lambda: datetime.now())
-    modified: datetime = Field(default_factory=lambda: datetime.now())
+    # use tz-aware UTC defaults
+    entry: TWDatetime = Field(default_factory=lambda: TWDatetime.now(timezone.utc))
+    modified: TWDatetime = Field(default_factory=lambda: TWDatetime.now(timezone.utc))
 
     project: str | None = None
     tags: list[str] = Field(default_factory=list)
     priority: Priority | None = None
 
-    due: datetime | None = None
-    scheduled: datetime | None = None
-    start: datetime | None = None
-    end: datetime | None = None
-    wait: datetime | None = None
-    until: datetime | None = None
+    # timestamps
+    due: TWDatetime | None = None
+    scheduled: TWDatetime | None = None
+    start: TWDatetime | None = None
+    end: TWDatetime | None = None
+    wait: TWDatetime | None = None
+    until: TWDatetime | None = None
 
     annotations: list[Annotation] = Field(default_factory=list)
-    depends: list[UUID] = Field(default_factory=list)
+
+    # depends uses the same adapter as UDAs
+    depends: UUIDList = Field(default_factory=UUIDList)
 
     # Core taskwarrior field names (including common computed fields to ignore)
     _CORE_FIELDS: ClassVar[set[str]] = {
@@ -102,69 +95,17 @@ class Task(BaseModel):
         "recur",
     }
 
-    @field_validator("entry", "modified", "due", "scheduled", "start", "end", "wait", "until", mode="before")
-    @classmethod
-    def parse_datetime(cls, value: str | datetime | None) -> datetime | None:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            return taskwarrior_to_datetime(value)
-        return value
-
-    @field_serializer("entry", "modified", "due", "scheduled", "start", "end", "wait", "until")
-    def serialize_datetime(self, value: datetime | None) -> str | None:
-        if value is None:
-            return None
-        return datetime_to_taskwarrior(value)
-
     @field_serializer("uuid")
     def serialize_uuid(self, value: UUID) -> str:
         return str(value)
 
-    @field_validator("depends", mode="before")
-    @classmethod
-    def parse_depends(cls, value: list[str] | list[UUID] | str | None) -> list[UUID]:
-        """
-        Taskwarrior exports dependencies as a comma-separated UUID string:
-            "depends": "uuid1,uuid2"
-        It may also appear as a list (from user code or other tooling).
-        """
-        if value is None:
-            return []
-
-        if isinstance(value, str):
-            raw = value.strip()
-            if not raw:
-                return []
-            parts = [p.strip() for p in raw.split(",")]
-            return [UUID(p) for p in parts if p]
-
-        # list[str|UUID]
-        return [UUID(dep) if isinstance(dep, str) else dep for dep in value]
-
-    @field_serializer("depends")
-    def serialize_depends(self, value: list[UUID]) -> str | None:
-        if not value:
-            return None
-        return ",".join(str(uuid) for uuid in value)
-
     def export_dict(self, exclude_none: bool = True) -> dict[str, Any]:
-        """Export task as dict suitable for Taskwarrior import."""
-        data = self.model_dump(
-            mode="json",
-            exclude_none=exclude_none,
-            by_alias=False,
-        )
-
-        # Remove empty lists that were serialized to None
-        if exclude_none:
-            data = {k: v for k, v in data.items() if v is not None}
-
-        return data
+        return self.model_dump(mode="json", exclude_none=exclude_none, by_alias=False)
 
     @classmethod
     def from_taskwarrior(cls, data: dict[str, Any]) -> Task:
         """Parse task from Taskwarrior export JSON."""
         # Filter out computed/internal Taskwarrior fields
-        clean_data = {k: v for k, v in data.items() if k not in ("id", "urgency", "mask", "imask", "parent", "recur")}
+        # clean_data = {k: v for k, v in data.items() if k not in ("id", "urgency", "mask", "imask", "parent", "recur")}
+        clean_data = {k: v for k, v in data.items() if k in cls._CORE_FIELDS or k in cls.model_fields}
         return cls.model_validate(clean_data)
