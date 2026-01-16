@@ -145,10 +145,10 @@ class Task(BaseModel):
             by_alias=False,
         )
 
-        # Include extra fields (unknown UDAs) if present
-        if self.__pydantic_extra__:
-            print(f"[DEBUG] Including extra UDA fields in export: {self.__pydantic_extra__}")
-            data.update(self.__pydantic_extra__)
+        ## Include extra fields (unknown UDAs) if present
+        # extra = getattr(self, "__pydantic_extra__", None)
+        # if extra:
+        #    data.update(extra)
 
         # Remove empty lists that were serialized to None
         if exclude_none:
@@ -162,6 +162,6 @@ class Task(BaseModel):
         # Filter out computed/internal Taskwarrior fields
         clean_data = {k: v for k, v in data.items() if k not in ("id", "urgency", "mask", "imask", "parent", "recur")}
 
-        print(f"\n\n[DEBUG] Clean data for Task creation: \n\n{clean_data}\n\n")
+        # print(f"\n\n[DEBUG] Clean data for Task creation: \n\n{clean_data}\n\n")
 
         return cls.model_validate(clean_data)

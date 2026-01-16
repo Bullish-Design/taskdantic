@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from taskdantic.enums import Priority, Status
-from taskdantic.models import Annotation, Task
+from taskdantic.models_final import Annotation, Task
 from taskdantic.types import TWDatetime, TWDuration, UUIDList
 
 __version__ = "0.1.0"
