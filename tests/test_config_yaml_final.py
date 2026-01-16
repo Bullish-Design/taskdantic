@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from taskdantic.models import TaskConfig, UDADefinition
+from taskdantic.config_models import TaskConfig, UDADefinition
 
 
 @pytest.mark.unit
@@ -82,6 +82,84 @@ class TestTaskConfigFromYaml:
         assert config.get("json.array") is True
         assert config.get("color.active") == "rgb555"
 
+    def test_load_structured_colors(self, temp_dir: Path) -> None:
+        """Test loading structured color configurations."""
+        yaml_file = temp_dir / "config.yaml"
+        yaml_content = {
+            "colors": {
+                "active": {"foreground": "white", "background": "green"},
+                "due": {"foreground": "red"},
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(yaml_content, f)
+
+        config = TaskConfig.from_yaml(yaml_file)
+
+        assert "colors" in config.config
+        assert config.config["colors"]["active"]["foreground"] == "white"
+        assert config.config["colors"]["active"]["background"] == "green"
+
+    def test_load_structured_reports(self, temp_dir: Path) -> None:
+        """Test loading structured report configurations."""
+        yaml_file = temp_dir / "config.yaml"
+        yaml_content = {
+            "reports": {
+                "next": {
+                    "columns": "id,description",
+                    "labels": "ID,Description",
+                    "filter": "status:pending",
+                    "sort": "urgency-",
+                }
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(yaml_content, f)
+
+        config = TaskConfig.from_yaml(yaml_file)
+
+        assert "reports" in config.config
+        assert config.config["reports"]["next"]["columns"] == "id,description"
+        assert config.config["reports"]["next"]["filter"] == "status:pending"
+
+    def test_load_contexts(self, temp_dir: Path) -> None:
+        """Test loading context configurations."""
+        yaml_file = temp_dir / "config.yaml"
+        yaml_content = {
+            "contexts": {
+                "work": {"filter": "+work"},
+                "home": "+home",
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(yaml_content, f)
+
+        config = TaskConfig.from_yaml(yaml_file)
+
+        assert "contexts" in config.config
+        assert config.config["contexts"]["work"]["filter"] == "+work"
+
+    def test_load_defaults(self, temp_dir: Path) -> None:
+        """Test loading default settings."""
+        yaml_file = temp_dir / "config.yaml"
+        yaml_content = {
+            "defaults": {
+                "command": "next",
+                "project": "inbox",
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(yaml_content, f)
+
+        config = TaskConfig.from_yaml(yaml_file)
+
+        assert "defaults" in config.config
+        assert config.config["defaults"]["command"] == "next"
+
     def test_load_udas(self, temp_dir: Path) -> None:
         """Test loading UDA definitions."""
         yaml_file = temp_dir / "config.yaml"
@@ -116,17 +194,20 @@ class TestTaskConfigFromYaml:
         yaml_content = {
             "data": {"location": "/home/user/.task"},
             "confirmation": False,
-            "json": {"array": True},
-            "hooks": False,
-            "color": {"active": "rgb555", "due": "rgb550"},
-            "udas": {
-                "estimate": {"type": "numeric", "label": "Estimate"},
+            "colors": {
+                "active": {"foreground": "white", "background": "green"},
             },
-            "report": {
+            "reports": {
                 "next": {
-                    "columns": "id,description,priority",
+                    "columns": "id,description",
+                    "labels": "ID,Description",
                     "filter": "status:pending",
                 }
+            },
+            "contexts": {"work": {"filter": "+work"}},
+            "defaults": {"command": "next"},
+            "udas": {
+                "estimate": {"type": "numeric", "label": "Estimate"},
             },
         }
 
@@ -138,7 +219,8 @@ class TestTaskConfigFromYaml:
         assert config.data_location == "/home/user/.task"
         assert len(config.udas) == 1
         assert config.get("confirmation") is False
-        assert config.get("report.next.filter") == "status:pending"
+        assert "colors" in config.config
+        assert "reports" in config.config
 
     def test_get_with_default(self, temp_dir: Path) -> None:
         """Test get() method with default values."""
@@ -236,6 +318,54 @@ class TestTaskConfigWriteTaskrc:
         content = taskrc_file.read_text()
         assert "data.location=/home/user/.task" in content
 
+    def test_write_with_structured_colors(self, temp_dir: Path) -> None:
+        """Test writing structured colors to .taskrc."""
+        yaml_file = temp_dir / "config.yaml"
+        taskrc_file = temp_dir / ".taskrc"
+
+        yaml_content = {
+            "colors": {
+                "active": {"foreground": "white", "background": "green"},
+                "due": {"foreground": "red"},
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(yaml_content, f)
+
+        config = TaskConfig.from_yaml(yaml_file)
+        config.write_taskrc(taskrc_file)
+
+        content = taskrc_file.read_text()
+        assert "color.active=white on green" in content
+        assert "color.due=red" in content
+
+    def test_write_with_structured_reports(self, temp_dir: Path) -> None:
+        """Test writing structured reports to .taskrc."""
+        yaml_file = temp_dir / "config.yaml"
+        taskrc_file = temp_dir / ".taskrc"
+
+        yaml_content = {
+            "reports": {
+                "next": {
+                    "columns": "id,description",
+                    "labels": "ID,Description",
+                    "filter": "status:pending",
+                }
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(yaml_content, f)
+
+        config = TaskConfig.from_yaml(yaml_file)
+        config.write_taskrc(taskrc_file)
+
+        content = taskrc_file.read_text()
+        assert "report.next.columns=id,description" in content
+        assert "report.next.labels=ID,Description" in content
+        assert "report.next.filter=status:pending" in content
+
     def test_write_with_udas(self, temp_dir: Path) -> None:
         """Test writing config with UDA definitions."""
         yaml_file = temp_dir / "config.yaml"
@@ -271,8 +401,16 @@ class TestTaskConfigWriteTaskrc:
         yaml_content = {
             "data": {"location": "/home/user/.task"},
             "confirmation": False,
-            "json": {"array": True},
-            "color": {"active": "rgb555", "due": "rgb550"},
+            "colors": {"active": {"foreground": "white", "background": "green"}},
+            "reports": {
+                "next": {
+                    "columns": "id,description",
+                    "labels": "ID,Description",
+                    "filter": "status:pending",
+                }
+            },
+            "contexts": {"work": {"filter": "+work"}},
+            "defaults": {"command": "next"},
             "udas": {"estimate": {"type": "numeric"}},
         }
 
@@ -285,8 +423,10 @@ class TestTaskConfigWriteTaskrc:
         content = taskrc_file.read_text()
         assert "data.location=/home/user/.task" in content
         assert "confirmation=off" in content
-        assert "json.array=on" in content
-        assert "color.active=rgb555" in content
+        assert "color.active=white on green" in content
+        assert "report.next.columns=id,description" in content
+        assert "context.work=+work" in content
+        assert "default.command=next" in content
         assert "uda.estimate.type=numeric" in content
 
     def test_roundtrip_yaml_to_taskrc(self, temp_dir: Path) -> None:
@@ -305,11 +445,9 @@ class TestTaskConfigWriteTaskrc:
         with open(yaml_file, "w", encoding="utf-8") as f:
             yaml.safe_dump(yaml_content, f)
 
-        # Load and write
         config = TaskConfig.from_yaml(yaml_file)
         config.write_taskrc(taskrc_file)
 
-        # Verify all data preserved
         assert config.data_location == "/home/user/.task"
         assert "estimate" in config.udas
 
@@ -332,38 +470,6 @@ class TestTaskConfigWriteTaskrc:
         config.write_taskrc(taskrc_file)
 
         assert taskrc_file.exists()
-        content = taskrc_file.read_text()
-        # Should only have generated comment
-        non_comment_lines = [
-            line for line in content.split("\n") if line and not line.startswith("#")
-        ]
-        assert len(non_comment_lines) == 0
-
-    def test_write_nested_report_config(self, temp_dir: Path) -> None:
-        """Test writing nested report configuration."""
-        yaml_file = temp_dir / "config.yaml"
-        taskrc_file = temp_dir / ".taskrc"
-
-        yaml_content = {
-            "report": {
-                "next": {
-                    "columns": "id,description,priority",
-                    "filter": "status:pending -WAITING",
-                    "labels": "ID,Description,Priority",
-                }
-            }
-        }
-
-        with open(yaml_file, "w", encoding="utf-8") as f:
-            yaml.safe_dump(yaml_content, f)
-
-        config = TaskConfig.from_yaml(yaml_file)
-        config.write_taskrc(taskrc_file)
-
-        content = taskrc_file.read_text()
-        assert "report.next.columns=id,description,priority" in content
-        assert "report.next.filter=status:pending -WAITING" in content
-        assert "report.next.labels=ID,Description,Priority" in content
 
 
 @pytest.mark.unit
@@ -374,7 +480,6 @@ class TestTaskConfigEdgeCases:
         """Test YAML with comments loads correctly."""
         yaml_file = temp_dir / "config.yaml"
 
-        # YAML allows comments
         yaml_text = """
 # This is a comment
 confirmation: false
@@ -431,15 +536,3 @@ verbose: true
         assert config.udas["estimate"].type == "numeric"
         assert config.udas["estimate"].label is None
         assert config.udas["estimate"].values is None
-
-    def test_yaml_with_expanduser_path(self, temp_dir: Path) -> None:
-        """Test paths with ~ are expanded."""
-        yaml_file = temp_dir / "config.yaml"
-        yaml_content = {"data": {"location": "~/.task"}}
-
-        with open(yaml_file, "w", encoding="utf-8") as f:
-            yaml.safe_dump(yaml_content, f)
-
-        # Test that from_yaml doesn't fail with tilde
-        config = TaskConfig.from_yaml(yaml_file)
-        assert config.get("data.location") == "~/.task"

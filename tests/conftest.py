@@ -1,7 +1,6 @@
 # tests/conftest.py
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
 from pathlib import Path

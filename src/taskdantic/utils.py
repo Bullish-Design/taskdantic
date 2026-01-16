@@ -75,12 +75,10 @@ def format_filter(filter_spec: str | dict[str, Any]) -> str:
 
     parts = []
     for key, value in filter_spec.items():
-        # Handle None - output as "key:" to clear the field
         if value is None:
             parts.append(f"{key}:")
             continue
 
-        # Handle tags specially - prefix with +
         if key == "tags":
             if isinstance(value, list):
                 for tag in value:
@@ -89,7 +87,6 @@ def format_filter(filter_spec: str | dict[str, Any]) -> str:
                 parts.append(f"+{value}")
             continue
 
-        # Handle other values
         if isinstance(value, bool):
             parts.append(f"{key}:{str(value).lower()}")
         elif isinstance(value, list):

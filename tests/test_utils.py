@@ -7,7 +7,8 @@ from uuid import uuid4
 
 import pytest
 
-from taskdantic.models import Priority, Task, TaskStatus
+from taskdantic.models import Task
+from taskdantic.types import Priority, TaskStatus
 from taskdantic.utils import format_filter, parse_task_export, task_to_json
 
 
@@ -261,7 +262,6 @@ class TestFormatFilter:
         }
         result = format_filter(filter_dict)
 
-        # Check all parts are present
         assert "status:pending" in result
         assert "project:work" in result
         assert "priority:H" in result

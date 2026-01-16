@@ -120,11 +120,9 @@ class TaskRcParser:
         if not include_path.exists():
             return
 
-        # Parse the included file directly into a temporary config
         included_config = TaskConfig(source_files=[include_path])
         self._parse_file(include_path, included_config, visited)
 
-        # Merge included config into main config
         for option in included_config.options:
             config.add_option(option)
         

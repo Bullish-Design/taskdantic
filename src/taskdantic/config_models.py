@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import yaml
+import tempfile
+
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
+
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -16,6 +20,75 @@ class UDAType(str, Enum):
     DURATION = "duration"
     NUMERIC = "numeric"
     STRING = "string"
+
+
+class ColorConfig(BaseModel):
+    """Color configuration with foreground and optional background."""
+
+    foreground: str
+    background: Optional[str] = None
+
+    def to_taskrc_value(self) -> str:
+        """Convert to .taskrc format: 'foreground on background' or 'foreground'."""
+        if self.background:
+            return f"{self.foreground} on {self.background}"
+        return self.foreground
+
+    @classmethod
+    def from_taskrc_value(cls, value: str) -> ColorConfig:
+        """Parse from .taskrc format."""
+        if " on " in value:
+            parts = value.split(" on ", 1)
+            return cls(foreground=parts[0].strip(), background=parts[1].strip())
+        return cls(foreground=value.strip())
+
+    @classmethod
+    def from_string(cls, value: str) -> ColorConfig:
+        """Alias for from_taskrc_value for convenience."""
+        return cls.from_taskrc_value(value)
+
+
+class ReportConfig(BaseModel):
+    """Report configuration with filter, columns, labels, sort, and description."""
+
+    columns: str
+    labels: str
+    filter: str
+    sort: Optional[str] = None
+    description: Optional[str] = None
+
+    def to_taskrc_dict(self, report_name: str) -> dict[str, str]:
+        """Convert to flat .taskrc key-value pairs."""
+        result = {
+            f"report.{report_name}.columns": self.columns,
+            f"report.{report_name}.labels": self.labels,
+            f"report.{report_name}.filter": self.filter,
+        }
+        if self.sort:
+            result[f"report.{report_name}.sort"] = self.sort
+        if self.description:
+            result[f"report.{report_name}.description"] = self.description
+        return result
+
+
+class UrgencyConfig(BaseModel):
+    """Urgency coefficient configuration."""
+
+    coefficient: float
+
+    def to_taskrc_value(self) -> str:
+        """Convert to .taskrc format."""
+        return str(self.coefficient)
+
+
+class ContextConfig(BaseModel):
+    """Context filter configuration."""
+
+    filter: str
+
+    def to_taskrc_value(self) -> str:
+        """Convert to .taskrc format."""
+        return self.filter
 
 
 class UDADefinition(BaseModel):
@@ -201,9 +274,14 @@ class TaskConfig(BaseModel):
                 current[final_key].source_file = source_file
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Get a configuration value by dot-notation key."""
+        """Get a configuration value by dot-notation key.
+
+        Handles both leaf nodes and branch nodes that have their own value.
+        Example: color=on and color.active=blue both exist.
+        """
         parts = key.split(".")
         current_dict = self.values
+        current_value = None
 
         for part in parts:
             if part not in current_dict:
@@ -213,6 +291,9 @@ class TaskConfig(BaseModel):
                 return current_value.value if current_value.value is not None else default
             current_dict = current_value.children
 
+        # After traversing, check if we have a branch node with a value
+        if current_value is not None and current_value.value is not None:
+            return current_value.value
         return default
 
     def get_section(self, prefix: str) -> dict[str, Any]:
@@ -251,6 +332,113 @@ class TaskConfig(BaseModel):
         """Get all options that match a given prefix."""
         return [opt for opt in self.options if opt.matches_prefix(prefix)]
 
+    @classmethod
+    def from_yaml(cls, yaml_path: str | Path) -> TaskConfig:
+        """Load TaskConfig from YAML file.
+
+        Args:
+            yaml_path: Path to YAML config file
+
+        Returns:
+            TaskConfig instance with hierarchical structure
+        """
+        path = Path(yaml_path).expanduser()
+        if not path.exists():
+            return cls()
+
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        config = cls()
+
+        # Process UDAs first
+        udas_dict = data.pop("udas", {})
+        for name, uda_data in udas_dict.items():
+            if isinstance(uda_data, dict):
+                uda_type = uda_data.get("type", "string")
+                uda_label = uda_data.get("label")
+                uda_values = uda_data.get("values")
+
+                config.udas[name] = UDADefinition(
+                    name=name,
+                    type=uda_type,
+                    label=uda_label,
+                    values=uda_values,
+                )
+
+        # Process remaining config into hierarchical structure
+        cls._process_dict_to_config(config, data, "")
+
+        # Extract data.location
+        config.data_location = config.get("data.location")
+
+        return config
+
+    def _to_yaml_dict(self) -> dict[str, Any]:
+        """Convert hierarchical structure back to YAML dict."""
+        result: dict[str, Any] = {}
+
+        for key, value in self.values.items():
+            if value.is_leaf:
+                result[key] = self._parse_value(value.value)
+            else:
+                child_dict = self._build_dict_from_values(value.children)
+                if value.value is not None:
+                    result[key] = self._parse_value(value.value)
+                if child_dict:
+                    if isinstance(result.get(key), dict):
+                        result[key].update(child_dict)
+                    else:
+                        result[key] = child_dict
+
+        return result
+
+    @staticmethod
+    def _parse_value(value: Optional[str]) -> Any:
+        """Parse string value back to Python types."""
+        if value is None or value == "":
+            return None
+        elif value == "on":
+            return True
+        elif value == "off":
+            return False
+        elif "," in value:
+            return value.split(",")
+        else:
+            # Try to parse as number
+            try:
+                if "." in value:
+                    return float(value)
+                else:
+                    return int(value)
+            except ValueError:
+                return value
+
+    @classmethod
+    def _process_dict_to_config(cls, config: TaskConfig, data: dict[str, Any], prefix: str) -> None:
+        """Recursively process dictionary into ConfigOptions."""
+        for key, value in data.items():
+            full_key = f"{prefix}.{key}" if prefix else key
+
+            if isinstance(value, dict):
+                cls._process_dict_to_config(config, value, full_key)
+            else:
+                str_value = cls._convert_value_to_string(value)
+                option = ConfigOption(key=full_key, value=str_value)
+                config.add_option(option)
+
+    @staticmethod
+    def _convert_value_to_string(value: Any) -> str:
+        """Convert Python value to taskrc string format."""
+        if value is None:
+            return ""
+        elif isinstance(value, bool):
+            return "on" if value else "off"
+        elif isinstance(value, list):
+            return ",".join(str(v) for v in value)
+        else:
+            return str(value)
+
     def merge(self, other: TaskConfig) -> TaskConfig:
         """Merge another TaskConfig into this one, with other taking precedence."""
         merged_values = {}
@@ -284,6 +472,73 @@ class TaskConfig(BaseModel):
     def get_udas(self) -> dict[str, dict[str, Any]]:
         """Get all UDA definitions as a dict for compatibility."""
         return {name: uda.to_dict() for name, uda in self.udas.items()}
+
+    def get_colors(self) -> dict[str, ColorConfig]:
+        """Get all color configurations."""
+        colors = {}
+        for opt in self.get_all_options_with_prefix("color."):
+            if opt.value:
+                color_key = opt.key.replace("color.", "")
+                colors[color_key] = ColorConfig.from_taskrc_value(opt.value)
+        return colors
+
+    def get_reports(self) -> dict[str, ReportConfig]:
+        """Get all report configurations."""
+        reports: dict[str, dict[str, str]] = {}
+        for opt in self.get_all_options_with_prefix("report."):
+            parts = opt.key.split(".")
+            if len(parts) >= 3:
+                report_name = parts[1]
+                field_name = ".".join(parts[2:])
+                if report_name not in reports:
+                    reports[report_name] = {}
+                if opt.value:
+                    reports[report_name][field_name] = opt.value
+
+        # Convert to ReportConfig objects
+        report_configs = {}
+        for name, fields in reports.items():
+            if "columns" in fields and "labels" in fields and "filter" in fields:
+                report_configs[name] = ReportConfig(
+                    columns=fields["columns"],
+                    labels=fields["labels"],
+                    filter=fields["filter"],
+                    sort=fields.get("sort"),
+                    description=fields.get("description"),
+                )
+        return report_configs
+
+    def write_taskrc(self, output_path: str | Path) -> None:
+        """Write configuration to .taskrc format.
+
+        Args:
+            output_path: Path where .taskrc should be written
+        """
+        from taskdantic.config_writer import TaskRcWriter
+
+        # Reconstruct full config dict for TaskRcWriter
+        full_config = self._to_yaml_dict()
+
+        if self.udas:
+            full_config["udas"] = {
+                name: {
+                    "type": uda.type.value,
+                    **({"label": uda.label} if uda.label else {}),
+                    **({"values": uda.values} if uda.values else {}),
+                }
+                for name, uda in self.udas.items()
+            }
+
+        # Write to temporary YAML then convert
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.safe_dump(full_config, f)
+            temp_yaml = f.name
+
+        try:
+            writer = TaskRcWriter(temp_yaml)
+            writer.write_taskrc(output_path)
+        finally:
+            Path(temp_yaml).unlink(missing_ok=True)
 
     @classmethod
     def from_file(cls, path: str | Path) -> TaskConfig:

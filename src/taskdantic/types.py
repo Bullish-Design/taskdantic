@@ -24,6 +24,5 @@ class Priority(str, Enum):
     LOW = "L"
 
 
-# Type aliases
 TaskDict = dict[str, Any]
 TaskFilter = str | dict[str, Any]

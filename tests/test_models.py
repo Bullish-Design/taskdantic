@@ -7,7 +7,8 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from taskdantic.models import Annotation, Priority, Task, TaskStatus
+from taskdantic.models import Annotation, Task
+from taskdantic.types import Priority, TaskStatus
 
 
 @pytest.mark.unit
@@ -103,7 +104,7 @@ class TestTaskModel:
         assert data["project"] == "work"
         assert data["priority"] == "H"
         assert data["tags"] == ["urgent"]
-        assert "uuid" not in data  # Should be excluded if None
+        assert "uuid" not in data
 
     def test_model_dump_with_dates(self) -> None:
         """Test model serialization with datetime fields."""

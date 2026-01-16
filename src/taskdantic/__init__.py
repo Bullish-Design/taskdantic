@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from taskdantic.config_models import TaskConfig, UDADefinition
 from taskdantic.config_writer import TaskRcWriter, create_default_yaml
 from taskdantic.exceptions import (
     ConfigError,
@@ -11,7 +12,7 @@ from taskdantic.exceptions import (
     TaskWarriorNotInstalledError,
     ValidationError,
 )
-from taskdantic.models import Annotation, Task, TaskConfig, UDADefinition
+from taskdantic.models import Annotation, Task
 from taskdantic.types import Priority, TaskStatus
 from taskdantic.warrior import TaskWarrior
 

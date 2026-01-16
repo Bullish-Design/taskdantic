@@ -9,12 +9,13 @@ from typing import Any, Optional
 from uuid import UUID
 
 from taskdantic.config import TaskRcParser
+from taskdantic.config_models import TaskConfig
 from taskdantic.exceptions import (
     TaskNotFoundError,
     TaskWarriorCommandError,
     TaskWarriorNotInstalledError,
 )
-from taskdantic.models import Task, TaskConfig
+from taskdantic.models import Task
 from taskdantic.types import Priority, TaskFilter, TaskStatus
 from taskdantic.utils import format_filter, parse_task_export, task_to_json
 
@@ -50,7 +51,6 @@ class TaskWarrior:
             parser = TaskRcParser(self.config_filename)
             self._config = parser.parse()
         else:
-            # Use default taskrc location
             default_rc = Path.home() / ".taskrc"
             if default_rc.exists():
                 parser = TaskRcParser(default_rc)
@@ -104,7 +104,6 @@ class TaskWarrior:
         Returns:
             Created Task object
         """
-        # Build task data
         task_data: dict[str, Any] = {
             "description": description,
             "status": TaskStatus.PENDING.value,
@@ -117,17 +116,13 @@ class TaskWarrior:
         if priority:
             task_data["priority"] = priority.value
 
-        # Add any additional fields
         task_data.update(kwargs)
 
-        # Create task via import
         task = Task.model_validate(task_data)
         json_data = task_to_json(task)
 
-        # Use 'task import' to add the task
         try:
             stdout, _ = self._execute("import", "-", stdin=json_data)
-            # Parse the result to get the created task with UUID
             tasks = parse_task_export(stdout)
             if tasks:
                 return tasks[0]
@@ -177,19 +172,14 @@ class TaskWarrior:
         if task.uuid is None:
             raise ValueError("Task must have UUID to update")
 
-        # Export current task to get all fields
         try:
             current = self.get(uuid=task.uuid)
         except TaskNotFoundError as e:
             raise TaskNotFoundError(f"Cannot update non-existent task: {task.uuid}") from e
 
-        # Build modification arguments
         args = ["modify"]
-
-        # Add UUID filter
         args.append(f"uuid:{task.uuid}")
 
-        # Build modification commands
         if task.description != current.description:
             args.append(task.description)
 
@@ -205,7 +195,6 @@ class TaskWarrior:
             else:
                 args.append("priority:")
 
-        # Handle tags
         if set(task.tags) != set(current.tags):
             for tag in current.tags:
                 if tag not in task.tags:
@@ -214,7 +203,6 @@ class TaskWarrior:
                 if tag not in current.tags:
                     args.append(f"+{tag}")
 
-        # Handle due date
         if task.due != current.due:
             if task.due:
                 due_str = task.due.strftime("%Y-%m-%dT%H:%M:%S")
@@ -222,11 +210,9 @@ class TaskWarrior:
             else:
                 args.append("due:")
 
-        # Execute modification if there are changes
         if len(args) > 2:
             self._execute(*args)
 
-        # Fetch updated task
         return self.get(uuid=task.uuid)
 
     def delete(
@@ -418,11 +404,9 @@ class TaskWarrior:
         """
         cmd = [self.task_command]
 
-        # Add config overrides
         for key, value in self.config_overrides.items():
             cmd.append(f"rc.{key}={value}")
 
-        # Add config file if specified
         if self.config_filename:
             cmd.append(f"rc:{self.config_filename}")
 

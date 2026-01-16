@@ -92,7 +92,6 @@ class TaskFactory:
                 "priority": priorities[i % len(priorities)],
                 "tags": tag_sets[i % len(tag_sets)],
             }
-            # Remove None values
             task = {k: v for k, v in task.items() if v is not None}
             tasks.append(task)
 

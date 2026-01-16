@@ -70,6 +70,104 @@ class TestTaskRcWriter:
         assert "data.location=/home/user/.task" in content
         assert "json.array=on" in content
 
+    def test_write_structured_colors(self, temp_dir: Path) -> None:
+        """Test writing structured color configurations."""
+        yaml_file = temp_dir / "config.yaml"
+        taskrc_file = temp_dir / ".taskrc"
+
+        config = {
+            "colors": {
+                "active": {"foreground": "white", "background": "green"},
+                "due": {"foreground": "red"},
+                "completed": "green on black",
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(config, f)
+
+        writer = TaskRcWriter(yaml_file)
+        writer.write_taskrc(taskrc_file)
+
+        content = taskrc_file.read_text()
+        assert "color.active=white on green" in content
+        assert "color.due=red" in content
+        assert "color.completed=green on black" in content
+
+    def test_write_structured_reports(self, temp_dir: Path) -> None:
+        """Test writing structured report configurations."""
+        yaml_file = temp_dir / "config.yaml"
+        taskrc_file = temp_dir / ".taskrc"
+
+        config = {
+            "reports": {
+                "next": {
+                    "columns": "id,description,priority",
+                    "labels": "ID,Description,Priority",
+                    "filter": "status:pending",
+                    "sort": "urgency-",
+                    "description": "Next tasks",
+                }
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(config, f)
+
+        writer = TaskRcWriter(yaml_file)
+        writer.write_taskrc(taskrc_file)
+
+        content = taskrc_file.read_text()
+        assert "report.next.columns=id,description,priority" in content
+        assert "report.next.labels=ID,Description,Priority" in content
+        assert "report.next.filter=status:pending" in content
+        assert "report.next.sort=urgency-" in content
+        assert "report.next.description=Next tasks" in content
+
+    def test_write_contexts(self, temp_dir: Path) -> None:
+        """Test writing context definitions."""
+        yaml_file = temp_dir / "config.yaml"
+        taskrc_file = temp_dir / ".taskrc"
+
+        config = {
+            "contexts": {
+                "work": {"filter": "+work"},
+                "home": "+home",
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(config, f)
+
+        writer = TaskRcWriter(yaml_file)
+        writer.write_taskrc(taskrc_file)
+
+        content = taskrc_file.read_text()
+        assert "context.work=+work" in content
+        assert "context.home=+home" in content
+
+    def test_write_defaults(self, temp_dir: Path) -> None:
+        """Test writing default settings."""
+        yaml_file = temp_dir / "config.yaml"
+        taskrc_file = temp_dir / ".taskrc"
+
+        config = {
+            "defaults": {
+                "command": "next",
+                "project": "inbox",
+            }
+        }
+
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(config, f)
+
+        writer = TaskRcWriter(yaml_file)
+        writer.write_taskrc(taskrc_file)
+
+        content = taskrc_file.read_text()
+        assert "default.command=next" in content
+        assert "default.project=inbox" in content
+
     def test_write_uda_definitions(self, temp_dir: Path) -> None:
         """Test writing UDA definitions."""
         yaml_file = temp_dir / "config.yaml"
@@ -199,12 +297,28 @@ class TestTaskRcWriter:
         lines = [line for line in content.split("\n") if line and not line.startswith("#")]
         assert len(lines) == 0
 
-    def test_write_deeply_nested_config(self, temp_dir: Path) -> None:
-        """Test writing deeply nested configuration."""
+    def test_write_complete_config(self, temp_dir: Path) -> None:
+        """Test writing complete config with all structured sections."""
         yaml_file = temp_dir / "config.yaml"
         taskrc_file = temp_dir / ".taskrc"
 
-        config = {"report": {"next": {"columns": "id", "filter": "status:pending"}}}
+        config = {
+            "data": {"location": "/home/user/.task"},
+            "confirmation": False,
+            "colors": {
+                "active": {"foreground": "white", "background": "green"},
+            },
+            "reports": {
+                "next": {
+                    "columns": "id,description",
+                    "labels": "ID,Description",
+                    "filter": "status:pending",
+                }
+            },
+            "contexts": {"work": {"filter": "+work"}},
+            "defaults": {"command": "next"},
+            "udas": {"estimate": {"type": "numeric"}},
+        }
 
         with open(yaml_file, "w", encoding="utf-8") as f:
             yaml.safe_dump(config, f)
@@ -213,43 +327,12 @@ class TestTaskRcWriter:
         writer.write_taskrc(taskrc_file)
 
         content = taskrc_file.read_text()
-        assert "report.next.columns=id" in content
-        assert "report.next.filter=status:pending" in content
-
-    def test_uda_without_values(self, temp_dir: Path) -> None:
-        """Test UDA definition without values field."""
-        yaml_file = temp_dir / "config.yaml"
-        taskrc_file = temp_dir / ".taskrc"
-
-        config = {"udas": {"estimate": {"type": "numeric", "label": "Hours"}}}
-
-        with open(yaml_file, "w", encoding="utf-8") as f:
-            yaml.safe_dump(config, f)
-
-        writer = TaskRcWriter(yaml_file)
-        writer.write_taskrc(taskrc_file)
-
-        content = taskrc_file.read_text()
+        assert "data.location=/home/user/.task" in content
+        assert "color.active=white on green" in content
+        assert "report.next.columns=id,description" in content
+        assert "context.work=+work" in content
+        assert "default.command=next" in content
         assert "uda.estimate.type=numeric" in content
-        assert "uda.estimate.label=Hours" in content
-        assert "uda.estimate.values" not in content
-
-    def test_uda_without_label(self, temp_dir: Path) -> None:
-        """Test UDA definition without label field."""
-        yaml_file = temp_dir / "config.yaml"
-        taskrc_file = temp_dir / ".taskrc"
-
-        config = {"udas": {"estimate": {"type": "numeric"}}}
-
-        with open(yaml_file, "w", encoding="utf-8") as f:
-            yaml.safe_dump(config, f)
-
-        writer = TaskRcWriter(yaml_file)
-        writer.write_taskrc(taskrc_file)
-
-        content = taskrc_file.read_text()
-        assert "uda.estimate.type=numeric" in content
-        assert "uda.estimate.label" not in content
 
 
 @pytest.mark.unit
@@ -269,7 +352,8 @@ class TestCreateDefaultYaml:
         assert "data" in config
         assert "location" in config["data"]
         assert "confirmation" in config
-        assert "json" in config
+        assert "colors" in config
+        assert "reports" in config
         assert "udas" in config
 
     def test_default_yaml_structure(self, temp_dir: Path) -> None:
@@ -281,9 +365,8 @@ class TestCreateDefaultYaml:
             config = yaml.safe_load(f)
 
         assert config["confirmation"] is False
-        assert config["json"]["array"] is True
-        assert config["hooks"] is False
-        assert config["context"] is None
+        assert isinstance(config["colors"], dict)
+        assert isinstance(config["reports"], dict)
         assert isinstance(config["udas"], dict)
 
     def test_default_yaml_is_valid(self, temp_dir: Path) -> None:

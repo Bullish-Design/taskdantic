@@ -8,14 +8,130 @@ import pytest
 
 from taskdantic.config import TaskRcParser
 from taskdantic.config_models import (
+    ColorConfig,
     ConfigOption,
     ConfigSection,
     ConfigValue,
+    ContextConfig,
+    ReportConfig,
     TaskConfig,
     UDADefinition,
     UDAType,
+    UrgencyConfig,
 )
 from taskdantic.exceptions import ConfigError
+
+
+@pytest.mark.unit
+class TestColorConfig:
+    """Test ColorConfig model."""
+
+    def test_foreground_only(self) -> None:
+        """Test color with foreground only."""
+        color = ColorConfig(foreground="red")
+        assert color.foreground == "red"
+        assert color.background is None
+        assert color.to_taskrc_value() == "red"
+
+    def test_foreground_and_background(self) -> None:
+        """Test color with foreground and background."""
+        color = ColorConfig(foreground="white", background="blue")
+        assert color.to_taskrc_value() == "white on blue"
+
+    def test_from_taskrc_value_simple(self) -> None:
+        """Test parsing simple color value."""
+        color = ColorConfig.from_taskrc_value("red")
+        assert color.foreground == "red"
+        assert color.background is None
+
+    def test_from_taskrc_value_with_background(self) -> None:
+        """Test parsing color with background."""
+        color = ColorConfig.from_taskrc_value("white on blue")
+        assert color.foreground == "white"
+        assert color.background == "blue"
+
+    def test_from_taskrc_value_complex(self) -> None:
+        """Test parsing complex color values."""
+        color = ColorConfig.from_taskrc_value("bold white on rgb500")
+        assert color.foreground == "bold white"
+        assert color.background == "rgb500"
+
+    def test_from_string_alias(self) -> None:
+        """Test from_string alias method."""
+        color = ColorConfig.from_string("green on black")
+        assert color.foreground == "green"
+        assert color.background == "black"
+
+
+@pytest.mark.unit
+class TestReportConfig:
+    """Test ReportConfig model."""
+
+    def test_minimal_report(self) -> None:
+        """Test report with required fields only."""
+        report = ReportConfig(
+            columns="id,description",
+            labels="ID,Description",
+            filter="status:pending",
+        )
+        assert report.columns == "id,description"
+        assert report.labels == "ID,Description"
+        assert report.filter == "status:pending"
+        assert report.sort is None
+        assert report.description is None
+
+    def test_complete_report(self) -> None:
+        """Test report with all fields."""
+        report = ReportConfig(
+            columns="id,description,priority",
+            labels="ID,Description,Priority",
+            filter="status:pending",
+            sort="urgency-",
+            description="Next tasks",
+        )
+        assert report.sort == "urgency-"
+        assert report.description == "Next tasks"
+
+    def test_to_taskrc_dict(self) -> None:
+        """Test converting to .taskrc format."""
+        report = ReportConfig(
+            columns="id,description",
+            labels="ID,Description",
+            filter="status:pending",
+            sort="urgency-",
+        )
+        result = report.to_taskrc_dict("next")
+        assert result["report.next.columns"] == "id,description"
+        assert result["report.next.labels"] == "ID,Description"
+        assert result["report.next.filter"] == "status:pending"
+        assert result["report.next.sort"] == "urgency-"
+
+
+@pytest.mark.unit
+class TestUrgencyConfig:
+    """Test UrgencyConfig model."""
+
+    def test_coefficient(self) -> None:
+        """Test urgency coefficient."""
+        urgency = UrgencyConfig(coefficient=5.0)
+        assert urgency.coefficient == 5.0
+        assert urgency.to_taskrc_value() == "5.0"
+
+    def test_negative_coefficient(self) -> None:
+        """Test negative coefficient."""
+        urgency = UrgencyConfig(coefficient=-2.5)
+        assert urgency.to_taskrc_value() == "-2.5"
+
+
+@pytest.mark.unit
+class TestContextConfig:
+    """Test ContextConfig model."""
+
+    def test_context_filter(self) -> None:
+        """Test context filter."""
+        context = ContextConfig(filter="+work")
+        assert context.filter == "+work"
+        assert context.to_taskrc_value() == "+work"
 
 
 @pytest.mark.unit
@@ -222,7 +338,7 @@ class TestTaskConfig:
         assert "location" not in color_section
 
     def test_both_value_and_children(self) -> None:
-        """Test handling both a value and children (taskw limitation case)."""
+        """Test handling both a value and children."""
         config = TaskConfig()
         config.add_option(ConfigOption(key="color", value="on"))
         config.add_option(ConfigOption(key="color.header", value="blue"))
@@ -255,6 +371,42 @@ class TestTaskConfig:
         color_options = config.get_all_options_with_prefix("color")
         assert len(color_options) == 2
         assert all(opt.key.startswith("color") for opt in color_options)
+
+    def test_get_colors(self) -> None:
+        """Test extracting color configurations."""
+        config = TaskConfig()
+        config.add_option(ConfigOption(key="color.active", value="white on green"))
+        config.add_option(ConfigOption(key="color.due", value="red"))
+        config.add_option(ConfigOption(key="color.completed", value="green on black"))
+
+        colors = config.get_colors()
+        assert "active" in colors
+        assert colors["active"].foreground == "white"
+        assert colors["active"].background == "green"
+        assert colors["due"].foreground == "red"
+        assert colors["due"].background is None
+
+    def test_get_reports(self) -> None:
+        """Test extracting report configurations."""
+        config = TaskConfig()
+        config.add_option(ConfigOption(key="report.next.columns", value="id,description"))
+        config.add_option(ConfigOption(key="report.next.labels", value="ID,Description"))
+        config.add_option(ConfigOption(key="report.next.filter", value="status:pending"))
+        config.add_option(ConfigOption(key="report.next.sort", value="urgency-"))
+
+        reports = config.get_reports()
+        assert "next" in reports
+        assert reports["next"].columns == "id,description"
+        assert reports["next"].filter == "status:pending"
+        assert reports["next"].sort == "urgency-"
+
+    def test_get_reports_incomplete(self) -> None:
+        """Test that incomplete reports are not returned."""
+        config = TaskConfig()
+        config.add_option(ConfigOption(key="report.incomplete.columns", value="id"))
+
+        reports = config.get_reports()
+        assert "incomplete" not in reports
 
 
 @pytest.mark.unit
@@ -408,7 +560,7 @@ confirmation=off
             TaskRcParser("/nonexistent/file.taskrc")
 
     def test_value_and_children_coexist(self, temp_dir: Path) -> None:
-        """Test that both parent value and children can exist (unlike taskw)."""
+        """Test that both parent value and children can exist."""
         config_file = temp_dir / ".taskrc"
         config_file.write_text(
             """

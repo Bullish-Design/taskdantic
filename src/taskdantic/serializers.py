@@ -11,7 +11,6 @@ def taskwarrior_datetime_serializer(dt: Optional[datetime]) -> Optional[str]:
     """Serialize datetime to Taskwarrior format (20260115T120000Z)."""
     if dt is None:
         return None
-    # Ensure UTC timezone
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     else:
@@ -24,18 +23,15 @@ def taskwarrior_datetime_validator(value: Any) -> Optional[datetime]:
     if value is None or value == "":
         return None
     if isinstance(value, datetime):
-        # Ensure UTC timezone
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
 
-    # Parse Taskwarrior format: 20260115T120000Z
     if isinstance(value, str):
         try:
             dt = datetime.strptime(value, "%Y%m%dT%H%M%SZ")
             return dt.replace(tzinfo=timezone.utc)
         except ValueError:
-            # Try ISO format as fallback
             try:
                 dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
                 return dt.astimezone(timezone.utc)
@@ -93,7 +89,6 @@ def duration_validator(value: Any) -> Optional[timedelta]:
     if not isinstance(value, str):
         raise TypeError(f"Expected str or timedelta, got {type(value)}")
 
-    # Parse ISO 8601 duration format: P[n]D[T[n]H[n]M[n]S]
     pattern = r"^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$"
     match = re.match(pattern, value)
 

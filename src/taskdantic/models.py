@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from taskdantic.serializers import (
@@ -170,125 +168,3 @@ class Task(BaseModel):
         populate_by_name=True,
         use_enum_values=True,
     )
-
-
-class UDADefinition(BaseModel):
-    """User-Defined Attribute definition."""
-
-    type: str
-    label: Optional[str] = None
-    values: Optional[list[str]] = None
-
-    model_config = ConfigDict(extra="allow")
-
-
-class TaskConfig(BaseModel):
-    """Taskwarrior configuration."""
-
-    data_location: Optional[str] = Field(None, alias="data.location")
-    udas: dict[str, UDADefinition] = Field(default_factory=dict)
-    config: dict[str, Any] = Field(default_factory=dict)
-
-    model_config = ConfigDict(
-        extra="allow",
-        populate_by_name=True,
-    )
-
-    @classmethod
-    def from_yaml(cls, yaml_path: str | Path) -> TaskConfig:
-        """Load TaskConfig from YAML file.
-
-        Args:
-            yaml_path: Path to YAML config file
-
-        Returns:
-            TaskConfig instance
-        """
-        path = Path(yaml_path).expanduser()
-        if not path.exists():
-            return cls()
-
-        with open(path, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-
-        # Extract UDAs
-        udas_dict = data.pop("udas", {})
-        udas = {}
-        for name, uda_data in udas_dict.items():
-            if isinstance(uda_data, dict):
-                udas[name] = UDADefinition(**uda_data)
-
-        # Extract data.location
-        data_location = None
-        if "data" in data and isinstance(data["data"], dict):
-            data_location = data["data"].get("location")
-
-        return cls(
-            data_location=data_location,
-            udas=udas,
-            config=data,
-        )
-
-    def write_taskrc(self, output_path: str | Path) -> None:
-        """Write configuration to .taskrc format.
-
-        Args:
-            output_path: Path where .taskrc should be written
-        """
-        from taskdantic.config_writer import TaskRcWriter
-
-        # Reconstruct full config dict
-        full_config = self.config.copy()
-        if self.udas:
-            full_config["udas"] = {
-                name: uda.model_dump(exclude_none=True) for name, uda in self.udas.items()
-            }
-
-        # Write to temporary YAML then convert
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml.safe_dump(full_config, f)
-            temp_yaml = f.name
-
-        try:
-            writer = TaskRcWriter(temp_yaml)
-            writer.write_taskrc(output_path)
-        finally:
-            Path(temp_yaml).unlink(missing_ok=True)
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get a config value by key using dot notation.
-
-        Args:
-            key: Config key with dot notation
-            default: Default value if key not found
-
-        Returns:
-            Config value or default
-        """
-        parts = key.split(".")
-        current = self.config
-
-        for part in parts:
-            if not isinstance(current, dict) or part not in current:
-                return default
-            current = current[part]
-
-        return current
-
-    def get_udas(self) -> dict[str, dict[str, Any]]:
-        """Get all UDA definitions as a dict.
-
-        Returns:
-            Dictionary of UDA definitions
-        """
-        result: dict[str, dict[str, Any]] = {}
-        for name, uda_def in self.udas.items():
-            result[name] = {
-                "type": uda_def.type,
-                "label": uda_def.label,
-            }
-            if uda_def.values:
-                result[name]["values"] = ",".join(uda_def.values)
-        return result
