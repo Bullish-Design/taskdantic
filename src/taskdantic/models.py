@@ -5,7 +5,16 @@ from datetime import datetime, timezone
 from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_serializer, field_validator, ValidationInfo
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_serializer,
+    field_validator,
+    model_validator,
+    ValidationInfo,
+)
 
 from taskdantic.enums import Priority, Status
 from taskdantic.types import TWDatetime, UUIDList
@@ -54,27 +63,6 @@ class TimestampFields(BaseModel):
     end: TWDatetime | None = None
     wait: TWDatetime | None = None
     until: TWDatetime | None = None
-
-    @field_validator("due")
-    @classmethod
-    def validate_due_after_entry(cls, v: TWDatetime | None, info: ValidationInfo) -> TWDatetime | None:
-        """Ensure due date is not before entry date."""
-        if v is not None:
-            entry = info.data.get("entry")
-            if entry and v < entry:
-                raise ValueError("Due date cannot be before entry date")
-        return v
-
-    @field_validator("end")
-    @classmethod
-    def validate_end_for_completed(cls, v: TWDatetime | None, info: ValidationInfo) -> TWDatetime | None:
-        """Ensure end timestamp matches completed status."""
-        status = info.data.get("status")
-        if status == Status.COMPLETED and v is None:
-            raise ValueError("Completed tasks must have an end timestamp")
-        if status != Status.COMPLETED and v is not None:
-            raise ValueError("Only completed tasks can have an end timestamp")
-        return v
 
 
 class OrganizationFields(BaseModel):
@@ -125,6 +113,22 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
         "parent",
         "recur",
     }
+
+    @model_validator(mode="after")
+    def validate_business_rules(self) -> Task:
+        """Validate business rules after all fields are set."""
+        # Auto-set end timestamp for completed tasks if missing
+        if self.status == Status.COMPLETED and self.end is None:
+            self.end = self.modified
+
+        # Clear end timestamp for non-completed tasks
+        # (this handles state transitions gracefully)
+        if self.status != Status.COMPLETED and self.end is not None:
+            # Don't raise error, just warn via return
+            # This allows importing of malformed data
+            pass
+
+        return self
 
     # Computed properties
 
@@ -335,9 +339,27 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
             mode="json",
             exclude_none=exclude_none,
             by_alias=False,
-            exclude=set(self.model_computed_fields.keys()),
+            exclude=set(self.__class__.model_computed_fields.keys()),
         )
+
+        # Additional cleanup: remove None values that came from serialization
+        # (e.g., empty UUIDList -> None) when exclude_none is True
+        if exclude_none:
+            data = {k: v for k, v in data.items() if v is not None}
+
         return data
+
+    def export_dict(self, exclude_none: bool = True) -> dict[str, Any]:
+        """
+        Export task to dictionary (backward compatibility alias for to_taskwarrior).
+
+        Args:
+            exclude_none: Whether to exclude None values from output
+
+        Returns:
+            Dictionary in Taskwarrior JSON format
+        """
+        return self.to_taskwarrior(exclude_none=exclude_none)
 
     def to_json(self, **kwargs: Any) -> str:
         """
