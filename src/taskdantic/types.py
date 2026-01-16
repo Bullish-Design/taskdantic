@@ -1,4 +1,3 @@
-# src/taskdantic/types.py
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -32,12 +31,50 @@ class TWDatetime(datetime):
         )
 
     @classmethod
-    def _validate(cls, value: Any, handler: Any) -> datetime:
-        if isinstance(value, str):
-            return taskwarrior_to_datetime(value)
-        if isinstance(value, datetime):
+    def _validate(cls, value: Any, handler: Any) -> TWDatetime:
+        if isinstance(value, cls):
             return value
-        return handler(value)
+
+        if isinstance(value, str):
+            dt = taskwarrior_to_datetime(value)
+            return cls(
+                dt.year,
+                dt.month,
+                dt.day,
+                dt.hour,
+                dt.minute,
+                dt.second,
+                dt.microsecond,
+                tzinfo=dt.tzinfo,
+            )
+
+        if isinstance(value, datetime):
+            return cls(
+                value.year,
+                value.month,
+                value.day,
+                value.hour,
+                value.minute,
+                value.second,
+                value.microsecond,
+                tzinfo=value.tzinfo,
+            )
+
+        coerced = handler(value)
+        if isinstance(coerced, cls):
+            return coerced
+        if isinstance(coerced, datetime):
+            return cls(
+                coerced.year,
+                coerced.month,
+                coerced.day,
+                coerced.hour,
+                coerced.minute,
+                coerced.second,
+                coerced.microsecond,
+                tzinfo=coerced.tzinfo,
+            )
+        return coerced
 
     @staticmethod
     def _serialize(value: datetime) -> str:
@@ -65,14 +102,28 @@ class TWDuration(timedelta):
         )
 
     @classmethod
-    def _validate(cls, value: Any, handler: Any) -> timedelta:
-        if isinstance(value, timedelta):
+    def _validate(cls, value: Any, handler: Any) -> TWDuration:
+        if isinstance(value, cls):
             return value
+
+        if isinstance(value, timedelta):
+            # Convert plain timedelta into TWDuration instance
+            return cls(days=value.days, seconds=value.seconds, microseconds=value.microseconds)
+
         if isinstance(value, str) and value.startswith("PT"):
-            return cls._parse_duration(value)
+            td = cls._parse_duration(value)
+            return cls(days=td.days, seconds=td.seconds, microseconds=td.microseconds)
+
         if isinstance(value, str):
-            return timedelta(seconds=int(value))
-        return handler(value)
+            td = timedelta(seconds=int(value))
+            return cls(days=td.days, seconds=td.seconds, microseconds=td.microseconds)
+
+        coerced = handler(value)
+        if isinstance(coerced, cls):
+            return coerced
+        if isinstance(coerced, timedelta):
+            return cls(days=coerced.days, seconds=coerced.seconds, microseconds=coerced.microseconds)
+        return coerced
 
     @staticmethod
     def _parse_duration(v: str) -> timedelta:
@@ -129,12 +180,25 @@ class UUIDList(list[UUID]):
         )
 
     @classmethod
-    def _validate(cls, value: Any, handler: Any) -> list[UUID]:
+    def _validate(cls, value: Any, handler: Any) -> UUIDList:
+        if isinstance(value, cls):
+            return value
+
         if isinstance(value, list):
-            return [UUID(u) if isinstance(u, str) else u for u in value]
+            items = [UUID(u) if isinstance(u, str) else u for u in value]
+            return cls(items)
+
         if isinstance(value, str):
-            return [UUID(u.strip()) for u in value.split(",") if u.strip()]
-        return handler(value)
+            items = [UUID(u.strip()) for u in value.split(",") if u.strip()]
+            return cls(items)
+
+        coerced = handler(value)
+        if isinstance(coerced, cls):
+            return coerced
+        if isinstance(coerced, list):
+            items = [UUID(u) if isinstance(u, str) else u for u in coerced]
+            return cls(items)
+        return coerced
 
     @staticmethod
     def _serialize(value: list[UUID]) -> str | None:

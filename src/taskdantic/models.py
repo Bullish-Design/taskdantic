@@ -1,4 +1,3 @@
-# src/taskdantic/models.py
 from __future__ import annotations
 
 from datetime import datetime
@@ -125,10 +124,22 @@ class Task(BaseModel):
     @field_validator("depends", mode="before")
     @classmethod
     def parse_depends(cls, value: list[str] | list[UUID] | str | None) -> list[UUID]:
+        """
+        Taskwarrior exports dependencies as a comma-separated UUID string:
+            "depends": "uuid1,uuid2"
+        It may also appear as a list (from user code or other tooling).
+        """
         if value is None:
             return []
+
         if isinstance(value, str):
-            return [UUID(value)]
+            raw = value.strip()
+            if not raw:
+                return []
+            parts = [p.strip() for p in raw.split(",")]
+            return [UUID(p) for p in parts if p]
+
+        # list[str|UUID]
         return [UUID(dep) if isinstance(dep, str) else dep for dep in value]
 
     @field_serializer("depends")
@@ -145,11 +156,6 @@ class Task(BaseModel):
             by_alias=False,
         )
 
-        ## Include extra fields (unknown UDAs) if present
-        # extra = getattr(self, "__pydantic_extra__", None)
-        # if extra:
-        #    data.update(extra)
-
         # Remove empty lists that were serialized to None
         if exclude_none:
             data = {k: v for k, v in data.items() if v is not None}
@@ -161,7 +167,4 @@ class Task(BaseModel):
         """Parse task from Taskwarrior export JSON."""
         # Filter out computed/internal Taskwarrior fields
         clean_data = {k: v for k, v in data.items() if k not in ("id", "urgency", "mask", "imask", "parent", "recur")}
-
-        # print(f"\n\n[DEBUG] Clean data for Task creation: \n\n{clean_data}\n\n")
-
         return cls.model_validate(clean_data)

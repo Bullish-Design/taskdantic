@@ -15,26 +15,44 @@ import sys
 from pathlib import Path
 
 root_path = str(Path(__file__).parent.parent / "src")
-# print(f"\n[INFO] Adding root path to sys.path: {root_path}\n")
-
 sys.path.insert(0, root_path)
 
-from taskdantic import Priority, Status, Task
+from pydantic import field_validator
+
+from taskdantic import Priority, Status, Task, TWDuration
 
 
-def create_new_task() -> Task:
-    """Create a new task programmatically."""
-    task = Task(
+class AgileTask(Task):
+    """Task with Agile UDAs for sprint tracking."""
+
+    sprint: str | None = None
+    points: int = 0
+    estimate: TWDuration | None = None
+
+    @field_validator("sprint")
+    @classmethod
+    def validate_sprint(cls, v: str | None) -> str | None:
+        if v and not v.startswith("Sprint "):
+            return f"Sprint {v}"
+        return v
+
+
+def create_new_task() -> AgileTask:
+    """Create a new task with UDAs programmatically."""
+    task = AgileTask(
         description="Write documentation for Taskdantic",
         project="taskdantic",
         tags=["coding", "docs"],
         priority=Priority.HIGH,
         due=datetime.now() + timedelta(days=7),
+        sprint="23",
+        points=5,
+        estimate=timedelta(hours=4),
     )
     return task
 
 
-def export_to_taskwarrior(task: Task) -> None:
+def export_to_taskwarrior(task: AgileTask) -> None:
     """Export task to JSON format for Taskwarrior import."""
     task_json = json.dumps(task.export_dict())
     print("Export for Taskwarrior:")
@@ -56,7 +74,7 @@ def import_from_taskwarrior() -> None:
         print(f"\nFound {len(tasks_data)} tasks in Taskwarrior")
 
         for task_data in tasks_data:
-            task = Task.from_taskwarrior(task_data)
+            task = AgileTask.from_taskwarrior(task_data)
             print(f"- {task.description} [{task.status.value}]")
 
     except subprocess.CalledProcessError:
@@ -66,13 +84,16 @@ def import_from_taskwarrior() -> None:
 
 
 def main() -> None:
-    print("=== Taskdantic MVP Demo ===\n")
+    print("=== Taskdantic Demo ===\n")
 
     task = create_new_task()
     print(f"Created task: {task.description}")
     print(f"UUID: {task.uuid}")
     print(f"Status: {task.status.value}")
     print(f"Priority: {task.priority.value if task.priority else 'None'}")
+    print(f"Sprint: {task.sprint}")
+    print(f"Points: {task.points}")
+    print(f"Estimate: {task.estimate}")
 
     export_to_taskwarrior(task)
     import_from_taskwarrior()
