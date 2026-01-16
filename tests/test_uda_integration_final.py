@@ -8,7 +8,7 @@ from uuid import UUID
 import pytest
 from pydantic import Field, field_validator
 
-from taskdantic import Priority, Status, Task
+from taskdantic import Priority, Status, Task, TWDatetime, TWDuration, UUIDList
 
 
 class AgileTask(Task):
@@ -16,8 +16,8 @@ class AgileTask(Task):
 
     sprint: str | None = None
     points: int = 0
-    estimate: timedelta | None = None
-    reviewed: datetime | None = None
+    estimate: TWDuration | None = None
+    reviewed: TWDatetime | None = None
 
     @field_validator("sprint")
     @classmethod
@@ -39,13 +39,12 @@ class DevOpsTask(Task):
     """DevOps deployment task."""
 
     environment: str | None = Field(default=None, pattern="^(dev|staging|prod)$")
-    deployment_time: datetime | None = None
+    deployment_time: TWDatetime | None = None
     rollback_safe: bool = True
 
 
 def test_full_agile_workflow():
     """Test complete agile workflow with task lifecycle."""
-    # Create sprint backlog
     tasks = [
         AgileTask(
             description="Implement OAuth2",
@@ -76,20 +75,17 @@ def test_full_agile_workflow():
         ),
     ]
 
-    # Calculate sprint totals
     total_points = sum(t.points for t in tasks)
     total_estimate = sum((t.estimate for t in tasks if t.estimate), timedelta())
 
     assert total_points == 16
     assert total_estimate == timedelta(hours=12)
 
-    # Export for Taskwarrior
     exported_tasks = [t.export_dict() for t in tasks]
     assert len(exported_tasks) == 3
     assert all("sprint" in t for t in exported_tasks)
     assert all(t["sprint"] == "Sprint 23" for t in exported_tasks)
 
-    # Simulate import back
     imported_tasks = [AgileTask.from_taskwarrior(data) for data in exported_tasks]
     assert len(imported_tasks) == 3
     assert all(t.sprint == "Sprint 23" for t in imported_tasks)
@@ -97,7 +93,6 @@ def test_full_agile_workflow():
 
 def test_bug_tracking_workflow():
     """Test bug tracking workflow."""
-    # Report bug
     bug = BugTask(
         description="Login redirects to wrong page",
         project="website",
@@ -110,12 +105,10 @@ def test_bug_tracking_workflow():
     assert bug.severity == "high"
     assert bug.status == Status.PENDING
 
-    # Export and verify
     exported = bug.export_dict()
     assert exported["severity"] == "high"
     assert exported["reported_by"] == "user@example.com"
 
-    # Complete bug fix
     bug.status = Status.COMPLETED
     bug.fixed_in = "v1.2.3"
     bug.end = datetime.now(timezone.utc)
@@ -127,7 +120,6 @@ def test_bug_tracking_workflow():
 
 def test_devops_deployment_workflow():
     """Test DevOps deployment workflow."""
-    # Create deployment tasks
     dev_deploy = DevOpsTask(
         description="Deploy to dev",
         project="platform",
@@ -149,12 +141,10 @@ def test_devops_deployment_workflow():
         rollback_safe=False,
     )
 
-    # Simulate deployment sequence
     for task in [dev_deploy, staging_deploy, prod_deploy]:
         task.status = Status.COMPLETED
         task.deployment_time = datetime.now(timezone.utc)
 
-    # Verify all deployed
     assert dev_deploy.environment == "dev"
     assert staging_deploy.environment == "staging"
     assert prod_deploy.environment == "prod"
@@ -164,13 +154,12 @@ def test_devops_deployment_workflow():
 def test_mixed_task_types_in_project():
     """Test working with multiple task types in same project."""
     tasks: list[Task] = [
-        AgileTask(description="Feature A", sprint="Sprint 24", points=8),
-        AgileTask(description="Feature B", sprint="Sprint 24", points=5),
+        AgileTask(description="Task 1", sprint="Sprint 25", points=5),
+        AgileTask(description="Task 2", sprint="Sprint 25", points=8),
         BugTask(description="Bug fix", severity="high"),
         DevOpsTask(description="Deploy", environment="prod"),
     ]
 
-    # Filter by type
     agile_tasks = [t for t in tasks if isinstance(t, AgileTask)]
     bug_tasks = [t for t in tasks if isinstance(t, BugTask)]
     devops_tasks = [t for t in tasks if isinstance(t, DevOpsTask)]
@@ -179,14 +168,12 @@ def test_mixed_task_types_in_project():
     assert len(bug_tasks) == 1
     assert len(devops_tasks) == 1
 
-    # Type-specific operations
     sprint_points = sum(t.points for t in agile_tasks)
     assert sprint_points == 13
 
 
 def test_taskwarrior_import_export_compatibility():
     """Test full compatibility with Taskwarrior JSON format."""
-    # Simulate Taskwarrior export
     tw_data = {
         "id": 42,
         "uuid": "12345678-1234-5678-1234-567812345678",
@@ -204,33 +191,26 @@ def test_taskwarrior_import_export_compatibility():
         "estimate": "PT6H",
     }
 
-    # Import
     task = AgileTask.from_taskwarrior(tw_data)
 
-    # Verify core fields
     assert task.description == "Implement feature"
     assert task.status == Status.PENDING
     assert task.project == "backend"
     assert task.tags == ["feature", "api"]
     assert task.priority == Priority.HIGH
 
-    # Verify UDAs
     assert task.sprint == "Sprint 23"
     assert task.points == 8
     assert task.estimate == timedelta(hours=6)
 
-    # Verify computed fields ignored
     assert not hasattr(task, "id")
     assert not hasattr(task, "urgency")
 
-    # Export back
     exported = task.export_dict()
 
-    # Should not include computed fields
     assert "id" not in exported
     assert "urgency" not in exported
 
-    # Should include UDAs
     assert exported["sprint"] == "Sprint 23"
     assert exported["points"] == 8
     assert exported["estimate"] == "PT6H"
@@ -240,12 +220,11 @@ def test_complex_uda_types_integration():
     """Test integration with complex UDA types."""
 
     class ProjectTask(Task):
-        blocked_by: list[UUID] | None = None
+        blocked_by: UUIDList | None = None
         reviewed_by: list[str] | None = None
-        last_review: datetime | None = None
-        time_spent: timedelta | None = None
+        last_review: TWDatetime | None = None
+        time_spent: TWDuration | None = None
 
-    # Create task with blocking dependencies
     blocker1_uuid = UUID("12345678-1234-5678-1234-567812345678")
     blocker2_uuid = UUID("87654321-4321-8765-4321-876543218765")
 
@@ -257,15 +236,12 @@ def test_complex_uda_types_integration():
         time_spent=timedelta(hours=4, minutes=30),
     )
 
-    # Export
     exported = task.export_dict()
 
-    # Verify serialization
     assert exported["blocked_by"] == f"{blocker1_uuid},{blocker2_uuid}"
     assert exported["last_review"] == "20240120T100000Z"
     assert exported["time_spent"] == "PT4H30M"
 
-    # Import back
     imported = ProjectTask.from_taskwarrior(exported)
 
     assert imported.blocked_by == [blocker1_uuid, blocker2_uuid]
@@ -282,18 +258,14 @@ def test_task_status_transitions_with_udas():
         estimate=timedelta(hours=6),
     )
 
-    # Start task
     task.status = Status.PENDING
     task.start = datetime.now(timezone.utc)
 
-    # Mark as reviewed
     task.reviewed = datetime.now(timezone.utc)
 
-    # Complete task
     task.status = Status.COMPLETED
     task.end = datetime.now(timezone.utc)
 
-    # Verify state
     assert task.status == Status.COMPLETED
     assert task.sprint == "Sprint 25"
     assert task.reviewed is not None
@@ -303,23 +275,19 @@ def test_task_status_transitions_with_udas():
 
 def test_batch_operations_with_udas():
     """Test batch operations on tasks with UDAs."""
-    # Create multiple tasks
     tasks = [
         AgileTask(description=f"Task {i}", sprint=f"Sprint {23 + i // 3}", points=(i % 5) + 1)
         for i in range(10)
     ]
 
-    # Group by sprint
     by_sprint: dict[str, list[AgileTask]] = {}
     for task in tasks:
         if task.sprint not in by_sprint:
             by_sprint[task.sprint] = []
         by_sprint[task.sprint].append(task)
 
-    # Verify grouping
-    assert len(by_sprint) >= 3  # At least 3 sprints
+    assert len(by_sprint) >= 3
 
-    # Calculate points per sprint
     for sprint, sprint_tasks in by_sprint.items():
         total = sum(t.points for t in sprint_tasks)
         assert total > 0
@@ -335,15 +303,12 @@ def test_json_serialization_deserialization():
         reviewed=datetime(2024, 1, 20, 10, 0, 0, tzinfo=timezone.utc),
     )
 
-    # Serialize to JSON
     exported = task.export_dict()
     json_str = json.dumps(exported)
 
-    # Deserialize
     data = json.loads(json_str)
     imported = AgileTask.from_taskwarrior(data)
 
-    # Verify
     assert imported.description == task.description
     assert imported.sprint == task.sprint
     assert imported.points == task.points
@@ -359,14 +324,12 @@ def test_default_values_integration():
         risk_level: str = "low"
         auto_close: bool = False
 
-    # Create without specifying defaults
     task1 = DefaultedTask(description="Task 1")
 
     assert task1.priority_score == 1.0
     assert task1.risk_level == "low"
     assert task1.auto_close is False
 
-    # Create with overrides
     task2 = DefaultedTask(description="Task 2", priority_score=2.5, risk_level="high")
 
     assert task2.priority_score == 2.5
@@ -377,7 +340,7 @@ def test_inheritance_with_validators():
     """Test that validators work correctly with UDA inheritance."""
 
     class BaseTaskWithValidation(Task):
-        estimate: timedelta | None = None
+        estimate: TWDuration | None = None
 
         @field_validator("estimate")
         @classmethod
@@ -386,10 +349,8 @@ def test_inheritance_with_validators():
                 raise ValueError("Estimate too long")
             return v
 
-    # Valid estimate
     task = BaseTaskWithValidation(description="Test", estimate=timedelta(days=7))
     assert task.estimate == timedelta(days=7)
 
-    # Invalid estimate
     with pytest.raises(Exception):  # ValidationError
         BaseTaskWithValidation(description="Test", estimate=timedelta(days=60))

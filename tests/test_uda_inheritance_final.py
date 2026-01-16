@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from pydantic import Field, field_validator
 
-from taskdantic import Priority, Status, Task
+from taskdantic import Priority, Status, Task, TWDatetime, TWDuration, UUIDList
 
 
 class AgileTask(Task):
@@ -15,13 +15,13 @@ class AgileTask(Task):
 
     sprint: str | None = None
     points: int = 0
-    estimate: timedelta | None = None
+    estimate: TWDuration | None = None
 
 
 class ValidatedTask(Task):
     """Task with validated UDAs."""
 
-    points: int = Field(ge=0, le=100)
+    points: int = Field(default=0, ge=0, le=100)
     sprint: str | None = None
 
     @field_validator("sprint")
@@ -35,9 +35,9 @@ class ValidatedTask(Task):
 class ComplexTask(Task):
     """Task with complex UDA types."""
 
-    reviewed: datetime | None = None
-    estimate: timedelta | None = None
-    blocked_by: list[UUID] | None = None
+    reviewed: TWDatetime | None = None
+    estimate: TWDuration | None = None
+    blocked_by: UUIDList | None = None
 
 
 def test_basic_uda_field_access():
@@ -62,13 +62,13 @@ def test_uda_optional_fields():
     task = AgileTask(description="Test task")
 
     assert task.sprint is None
-    assert task.points == 0  # Default value
+    assert task.points == 0
 
 
 def test_uda_field_validation():
     """Test Pydantic validation on UDA fields."""
     with pytest.raises(Exception):  # ValidationError
-        ValidatedTask(description="Test", points=150)  # Over max
+        ValidatedTask(description="Test", points=150)
 
 
 def test_uda_field_validator():
@@ -319,7 +319,8 @@ def test_unknown_uda_in_import():
     task = AgileTask.from_taskwarrior(data)
 
     assert task.sprint == "Sprint 23"
-    assert task.unknown_field == "some_value"  # Stored in __pydantic_extra__
+    # Unknown fields stored in __pydantic_extra__
+    assert task.__pydantic_extra__["unknown_field"] == "some_value"
 
 
 def test_uda_field_defaults():
@@ -333,17 +334,6 @@ def test_uda_field_defaults():
 
     assert task.priority_score == 1.0
     assert task.complexity == 1
-
-
-def test_get_uda_fields():
-    """Test the _get_uda_fields class method."""
-    uda_fields = AgileTask._get_uda_fields()
-
-    assert "sprint" in uda_fields
-    assert "points" in uda_fields
-    assert "estimate" in uda_fields
-    assert "description" not in uda_fields
-    assert "uuid" not in uda_fields
 
 
 def test_uda_with_all_core_fields():
