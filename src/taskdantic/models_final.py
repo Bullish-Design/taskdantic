@@ -38,7 +38,7 @@ class Task(BaseModel):
 
     Example:
         from taskdantic import Task, TWDatetime, TWDuration
-        
+
         class AgileTask(Task):
             sprint: str | None = None
             points: int = 0
@@ -145,6 +145,11 @@ class Task(BaseModel):
             by_alias=False,
         )
 
+        # Include extra fields (unknown UDAs) if present
+        if self.__pydantic_extra__:
+            print(f"[DEBUG] Including extra UDA fields in export: {self.__pydantic_extra__}")
+            data.update(self.__pydantic_extra__)
+
         # Remove empty lists that were serialized to None
         if exclude_none:
             data = {k: v for k, v in data.items() if v is not None}
@@ -155,8 +160,8 @@ class Task(BaseModel):
     def from_taskwarrior(cls, data: dict[str, Any]) -> Task:
         """Parse task from Taskwarrior export JSON."""
         # Filter out computed/internal Taskwarrior fields
-        clean_data = {
-            k: v for k, v in data.items() if k not in ("id", "urgency", "mask", "imask", "parent", "recur")
-        }
+        clean_data = {k: v for k, v in data.items() if k not in ("id", "urgency", "mask", "imask", "parent", "recur")}
+
+        print(f"\n\n[DEBUG] Clean data for Task creation: \n\n{clean_data}\n\n")
 
         return cls.model_validate(clean_data)

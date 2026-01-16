@@ -317,10 +317,12 @@ def test_unknown_uda_in_import():
     }
 
     task = AgileTask.from_taskwarrior(data)
+    # print(f"\n\n[DEBUG] Imported task with unknown UDA: \n\n{task.__pydantic_extra__}\n")
 
     assert task.sprint == "Sprint 23"
-    # Unknown fields stored in __pydantic_extra__
-    assert task.__pydantic_extra__["unknown_field"] == "some_value"
+    # Unknown fields should be preserved in export
+    exported = task.export_dict()
+    assert exported["unknown_field"] == "some_value"
 
 
 def test_uda_field_defaults():
