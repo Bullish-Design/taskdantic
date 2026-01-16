@@ -95,17 +95,29 @@ class Task(BaseModel):
         "recur",
     }
 
+    _COMPUTED_FIELDS_TO_IGNORE: ClassVar[set[str]] = {
+        "id",
+        "urgency",
+        "mask",
+        "imask",
+        "parent",
+        "recur",
+    }
+
     @field_serializer("uuid")
     def serialize_uuid(self, value: UUID) -> str:
         return str(value)
 
     def export_dict(self, exclude_none: bool = True) -> dict[str, Any]:
-        return self.model_dump(mode="json", exclude_none=exclude_none, by_alias=False)
+        data = self.model_dump(mode="json", exclude_none=exclude_none, by_alias=False)
+        if exclude_none:
+            data = {k: v for k, v in data.items() if v is not None}
+        return data
 
     @classmethod
     def from_taskwarrior(cls, data: dict[str, Any]) -> Task:
         """Parse task from Taskwarrior export JSON."""
         # Filter out computed/internal Taskwarrior fields
         # clean_data = {k: v for k, v in data.items() if k not in ("id", "urgency", "mask", "imask", "parent", "recur")}
-        clean_data = {k: v for k, v in data.items() if k in cls._CORE_FIELDS or k in cls.model_fields}
+        clean_data = {k: v for k, v in data.items() if k not in cls._COMPUTED_FIELDS_TO_IGNORE}
         return cls.model_validate(clean_data)

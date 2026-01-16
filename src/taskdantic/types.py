@@ -172,6 +172,7 @@ class UUIDList(list[UUID]):
             cls._validate,
             core_schema.union_schema(
                 [
+                    core_schema.none_schema(),
                     core_schema.is_instance_schema(list),
                     core_schema.str_schema(),
                 ]
@@ -181,6 +182,9 @@ class UUIDList(list[UUID]):
 
     @classmethod
     def _validate(cls, value: Any, handler: Any) -> UUIDList:
+        if value is None:
+            return cls([])
+
         if isinstance(value, cls):
             return value
 
