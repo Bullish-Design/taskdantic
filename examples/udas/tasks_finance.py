@@ -5,28 +5,28 @@ from datetime import timedelta
 
 from pydantic import Field
 
-from taskdantic import Task, TWDuration
+from taskdantic import Task, TWDuration, uda
 
 
 class FinanceTask(Task):
     cost_center: str | None = Field(
         default=None,
-        json_schema_extra={"taskwarrior": {"label": "Cost Center"}},
+        json_schema_extra=uda(label="Cost Center"),
     )
 
     budget: float | None = Field(
         default=None,
-        json_schema_extra={"taskwarrior": {"label": "Budget USD"}},
+        json_schema_extra=uda(label="Budget USD"),
     )
 
     # Another duration UDA to confirm multiple modules merge fine
     timebox: TWDuration | None = Field(
         default=None,
-        json_schema_extra={"taskwarrior": {"label": "Timebox"}},
+        json_schema_extra=uda(label="Timebox"),
     )
 
     # Literal without explicit values: exporter should infer values automatically
     risk: Literal["low", "medium", "high"] | None = Field(
         default=None,
-        json_schema_extra={"taskwarrior": {"label": "Risk"}},
+        json_schema_extra=uda(label="Risk"),
     )
