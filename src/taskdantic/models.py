@@ -304,19 +304,62 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
 
     # UDA methods
 
+    # These classes define Task's "core" schema. Subclasses add UDAs on top.
+    _CORE_FIELD_PROVIDERS: ClassVar[tuple[type[BaseModel], ...]] = (
+        CoreTaskFields,
+        TimestampFields,
+        OrganizationFields,
+        RelationshipFields,
+    )
+
+    @classmethod
+    def core_field_names(cls) -> set[str]:
+        """
+        Return the stable set of Task core field names (excluding subclass UDAs).
+
+        This is intentionally derived from the mixins that define Task's base schema,
+        so it does NOT grow when a subclass adds fields.
+        """
+        names: set[str] = set()
+        for provider in cls._CORE_FIELD_PROVIDERS:
+            names.update(provider.model_fields.keys())
+        return names
+
+    @classmethod
+    def is_core_field(cls, name: str) -> bool:
+        """
+        Return True if `name` is part of the Task core schema or a computed field.
+        """
+        return name in cls.core_field_names() or name in cls.model_computed_fields
+
     def get_udas(self) -> dict[str, Any]:
         """
-        Return all User Defined Attributes.
+        Return all User Defined Attributes (UDAs).
 
-        Returns:
-            Dictionary of UDA field names and values
+        UDAs include:
+          - subclass-declared fields, and
+          - extra fields allowed by `extra="allow"` on the base model config.
         """
-        model_fields = set(self.model_fields.keys())
-        computed_fields = set(self.model_computed_fields.keys())
-        core_fields = model_fields | computed_fields
+        core = self.__class__.core_field_names()
+        computed = set(self.__class__.model_computed_fields.keys())
 
-        all_data = self.model_dump()
-        return {k: v for k, v in all_data.items() if k not in core_fields and not k.startswith("_")}
+        # Dump without computed fields so they don't get misclassified as UDAs.
+        all_data = self.model_dump(exclude=computed)
+
+        return {k: v for k, v in all_data.items() if k not in core and not k.startswith("_")}
+
+    def model_dump_udas(self, exclude_none: bool = True) -> dict[str, Any]:
+        """
+        Dump only UDAs, using the same serialization rules as `to_taskwarrior()`.
+
+        This returns Taskwarrior-ready values (e.g., TWDatetime serialized to strings,
+        UUIDList serialized to comma-separated strings, etc.), consistent with
+        `to_taskwarrior()`. :contentReference[oaicite:2]{index=2}
+        """
+        data = self.to_taskwarrior(exclude_none=exclude_none)
+        core = self.__class__.core_field_names()
+
+        return {k: v for k, v in data.items() if k not in core and not k.startswith("_")}
 
     @property
     def uda_names(self) -> list[str]:

@@ -2,7 +2,10 @@
 
 {
   # https://devenv.sh/basics/
-  env.GREET = "taskdantic";
+  env = {
+    GREET = "taskdantic";
+    TASKRC_PATH = "$DEVENV_ROOT/examples";
+    };
 
   # https://devenv.sh/packages/
   packages = with pkgs; [ 
