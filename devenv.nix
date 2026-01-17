@@ -4,7 +4,7 @@
   # https://devenv.sh/basics/
   env = {
     GREET = "taskdantic";
-    TASKRC_PATH = "$DEVENV_ROOT/examples";
+    #TASKRC_PATH = "${$DEVENV_ROOT}/examples";
     };
 
   # https://devenv.sh/packages/
@@ -32,12 +32,21 @@
 
   # https://devenv.sh/scripts/
   scripts.hello.exec = ''
-    echo hello from $GREET
-    echo
+    echo hello from $GREET @ $DEVENV_ROOT
   '';
+
+  scripts.setenv.exec = ''
+    export TASKRC_PATH=$DEVENV_ROOT/examples/.taskrc
+    echo $TASKRC_PATH
+    export TASKDANTIC_TASKS_ROOT=$DEVENV_ROOT/examples/uda
+    echo $TASKDANTIC_TASKS_ROOT
+    '';
 
   enterShell = ''
     hello
+    echo
+    setenv
+    echo
     git --version
     echo
   '';

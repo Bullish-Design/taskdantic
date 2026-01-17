@@ -4,9 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Iterable, Literal, Union, get_args, get_origin
-
-from pydantic import BaseModel
+from typing import Any, Iterable, Literal, Union, get_args, get_origin, Annotated
 
 from taskdantic.models import Task
 
@@ -27,7 +25,7 @@ class UdaSpec:
 
 def _unwrap_annotated(tp: Any) -> Any:
     # typing.Annotated[T, ...] -> T
-    if get_origin(tp) is Annotated:  # type: ignore[name-defined]
+    if get_origin(tp) is Annotated:
         args = get_args(tp)
         return args[0] if args else tp
     return tp
@@ -82,15 +80,6 @@ def _taskwarrior_extra(field: Any) -> dict[str, Any]:
 
 
 def extract_uda_specs(task_cls: type[Task]) -> list[UdaSpec]:
-    """
-    Extract UDA specs from a Task subclass.
-
-    UDAs are defined as:
-      - fields not in Task core schema, and
-      - not computed fields, and
-      - not private fields.
-    """
-    # Prefer the new stable API if present, otherwise fall back.
     if hasattr(task_cls, "core_field_names"):
         core = task_cls.core_field_names()  # type: ignore[attr-defined]
     else:
@@ -123,11 +112,6 @@ def extract_uda_specs(task_cls: type[Task]) -> list[UdaSpec]:
 
 
 def merge_uda_specs(spec_lists: Iterable[Iterable[UdaSpec]]) -> dict[str, UdaSpec]:
-    """
-    Merge UDA specs across multiple Task subclasses.
-
-    If the same UDA name is declared with different type/values/label, raise.
-    """
     merged: dict[str, UdaSpec] = {}
     for specs in spec_lists:
         for s in specs:
@@ -144,9 +128,6 @@ def merge_uda_specs(spec_lists: Iterable[Iterable[UdaSpec]]) -> dict[str, UdaSpe
 
 
 def render_taskrc_udas(specs: Iterable[UdaSpec]) -> str:
-    """
-    Render UDA definitions as taskrc lines.
-    """
     lines: list[str] = []
     for s in sorted(specs, key=lambda x: x.name):
         lines.append(f"uda.{s.name}.type={s.type}")

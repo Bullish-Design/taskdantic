@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from taskdantic.enums import Priority, Status
 from taskdantic.models import Annotation, Task
-from taskdantic.types import TWDatetime, TWDuration, UUIDList
+from taskdantic.task_types import TWDatetime, TWDuration, UUIDList
 from taskdantic.utils import export_tasks, load_tasks
 
 

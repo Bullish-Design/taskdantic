@@ -5,6 +5,7 @@ description = "Pydantic models for Taskwarrior JSON format"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0.0",
+    "python-dotenv>=1.2.1",
 ]
 
 [project.optional-dependencies]

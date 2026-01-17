@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 from taskdantic.enums import Priority, Status
-from taskdantic.types import TWDatetime, UUIDList
+from taskdantic.task_types import TWDatetime, UUIDList
 
 
 def _utc_now() -> datetime:
