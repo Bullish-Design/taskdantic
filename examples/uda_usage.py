@@ -77,7 +77,7 @@ def export_import() -> None:
         estimate=timedelta(hours=10),
     )
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
     print("Exported JSON:")
     print(json.dumps(exported, indent=2, default=str))
 

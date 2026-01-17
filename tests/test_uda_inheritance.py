@@ -131,7 +131,7 @@ def test_uda_uuid_list_from_string():
     assert task.blocked_by == [uuid1, uuid2]
 
 
-def test_uda_export_dict():
+def test_uda_to_taskwarrior():
     """Test exporting task with UDAs."""
     task = AgileTask(
         description="Test task",
@@ -140,7 +140,7 @@ def test_uda_export_dict():
         estimate=timedelta(hours=4),
     )
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
 
     assert exported["description"] == "Test task"
     assert exported["sprint"] == "Sprint 23"
@@ -148,11 +148,11 @@ def test_uda_export_dict():
     assert exported["estimate"] == "PT4H"
 
 
-def test_uda_export_dict_exclude_none():
+def test_uda_to_taskwarrior_exclude_none():
     """Test that None UDA fields are excluded from export."""
     task = AgileTask(description="Test task", points=5)
 
-    exported = task.export_dict(exclude_none=True)
+    exported = task.to_taskwarrior(exclude_none=True)
 
     assert "sprint" not in exported
     assert "estimate" not in exported
@@ -164,7 +164,7 @@ def test_uda_datetime_export():
     reviewed = datetime(2024, 1, 20, 10, 0, 0, tzinfo=timezone.utc)
     task = ComplexTask(description="Test task", reviewed=reviewed)
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
 
     assert exported["reviewed"] == "20240120T100000Z"
 
@@ -173,7 +173,7 @@ def test_uda_timedelta_export():
     """Test timedelta UDA serialization."""
     task = AgileTask(description="Test task", estimate=timedelta(hours=2, minutes=30))
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
 
     assert exported["estimate"] == "PT2H30M"
 
@@ -185,7 +185,7 @@ def test_uda_uuid_list_export():
 
     task = ComplexTask(description="Test task", blocked_by=[uuid1, uuid2])
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
 
     assert exported["blocked_by"] == "12345678-1234-5678-1234-567812345678,87654321-4321-8765-4321-876543218765"
 
@@ -240,7 +240,7 @@ def test_uda_roundtrip():
         estimate=timedelta(hours=4, minutes=30),
     )
 
-    exported = original.export_dict()
+    exported = original.to_taskwarrior()
     imported = AgileTask.from_taskwarrior(exported)
 
     assert imported.description == original.description
@@ -299,7 +299,7 @@ def test_uda_inheritance_chain():
     assert task.base_field == "base_value"
     assert task.extended_field == 42
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
     assert exported["base_field"] == "base_value"
     assert exported["extended_field"] == 42
 
@@ -321,7 +321,7 @@ def test_unknown_uda_in_import():
 
     assert task.sprint == "Sprint 23"
     # Unknown fields should be preserved in export
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
     assert exported["unknown_field"] == "some_value"
 
 
@@ -351,7 +351,7 @@ def test_uda_with_all_core_fields():
         points=8,
     )
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
 
     assert exported["description"] == "Complex task"
     assert exported["project"] == "test_project"
@@ -363,7 +363,7 @@ def test_empty_timedelta():
     """Test handling of zero-duration timedelta."""
     task = AgileTask(description="Test", estimate=timedelta(0))
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
     assert exported["estimate"] == "PT0S"
 
     imported = AgileTask.from_taskwarrior(exported)
@@ -374,7 +374,7 @@ def test_complex_timedelta():
     """Test handling of complex timedelta values."""
     task = AgileTask(description="Test", estimate=timedelta(hours=10, minutes=45, seconds=30))
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
     assert exported["estimate"] == "PT10H45M30S"
 
     imported = AgileTask.from_taskwarrior(exported)

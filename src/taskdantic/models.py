@@ -254,18 +254,6 @@ class Task(BaseModel):
 
         return data
 
-    def export_dict(self, exclude_none: bool = True) -> dict[str, Any]:
-        """
-        Export task to dictionary (backward compatibility alias for to_taskwarrior).
-
-        Args:
-            exclude_none: Whether to exclude None values from output
-
-        Returns:
-            Dictionary in Taskwarrior JSON format
-        """
-        return self.to_taskwarrior(exclude_none=exclude_none)
-
     def to_json(self, **kwargs: Any) -> str:
         """
         Serialize task to JSON string.
