@@ -13,8 +13,12 @@ cli = typer.Typer(help="Taskdantic command line interface.")
 
 @cli.command("sync")
 def sync(
-    taskrc_path: Annotated[str, typer.Option("--taskrc", exists=True, dir_okay=False)],
-    tasks_root: Annotated[str | None, typer.Option("--tasks-root", file_okay=False)] = None,
+    taskrc_path: Annotated[
+        str, typer.Option(..., "--taskrc", exists=True, dir_okay=False)
+    ],
+    tasks_root: Annotated[
+        str | None, typer.Option(None, "--tasks-root", file_okay=False)
+    ],
 ) -> None:
     """Sync taskrc UDAs from Task models."""
     sync_taskrc_udas(taskrc_path=taskrc_path, tasks_root=tasks_root)
