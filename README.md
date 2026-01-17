@@ -109,9 +109,9 @@ For Taskwarrior-specific formats, use the custom field types:
 ### Quick start
 
 ```python
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
-from taskdantic import Priority, Task, TWDatetime, TWDuration
+from taskdantic import Priority, Task, TWDatetime, TWDuration, uda
 
 
 class AgileTask(Task):
@@ -119,6 +119,7 @@ class AgileTask(Task):
     points: int = 0
     estimate: TWDuration | None = None
     reviewed: TWDatetime | None = None
+    external_id: str | None = Field(default=None, json_schema_extra=uda(label="External ID"))
 
     @field_validator("sprint")
     @classmethod
@@ -136,6 +137,33 @@ task = AgileTask(
     estimate="PT6H",             # ISO 8601 -> timedelta
     reviewed="20240120T100000Z", # Taskwarrior -> datetime
 )
+```
+
+### `uda()` marker metadata
+
+Use `uda()` to declare Taskwarrior metadata (labels, types, values, urgency) alongside your Pydantic fields:
+
+```python
+from pydantic import Field
+
+from taskdantic import Task, uda
+
+
+class ExpenseTask(Task):
+    cost_center: str | None = Field(default=None, json_schema_extra=uda(label="Cost Center"))
+    billable: str | None = Field(default=None, json_schema_extra=uda(label="Billable", values=["yes", "no"]))
+```
+
+### UDA mixins
+
+Taskdantic ships with reusable mixins to keep common UDA fields consistent across task models:
+
+```python
+from taskdantic import AgileUDAMixin, Task
+
+
+class SprintTask(AgileUDAMixin, Task):
+    pass
 ```
 
 ### Custom field types
@@ -318,6 +346,29 @@ Exports a JSON-ready dictionary intended for Taskwarrior import. By default, fie
 
 Parses one task object from `task export`. Taskwarrior export may include computed fields such as `id` and `urgency`;
 these are ignored during parsing.
+
+### `TaskService`
+
+`TaskService` provides helpers for common task lifecycle operations.
+
+```python
+from taskdantic import Task, TaskService
+
+service = TaskService()
+task = Task(description="Ship release")
+
+service.start(task)
+service.tag(task, "release")
+service.complete(task)
+```
+
+## CLI
+
+Sync Taskwarrior UDAs into a taskrc file:
+
+```bash
+taskdantic sync --taskrc ~/.taskrc --tasks-root ./tasks
+```
 
 ## Notes and limitations
 
