@@ -14,7 +14,7 @@ def test_roundtrip_minimal_task():
     """Test full roundtrip: create → export → parse."""
     original = Task(description="Minimal task")
 
-    exported = original.export_dict()
+    exported = original.to_taskwarrior()
     parsed = Task.from_taskwarrior(exported)
 
     assert parsed.description == original.description
@@ -41,7 +41,7 @@ def test_roundtrip_complex_task():
         ],
     )
 
-    exported = original.export_dict()
+    exported = original.to_taskwarrior()
     parsed = Task.from_taskwarrior(exported)
 
     assert parsed.description == original.description
@@ -172,7 +172,7 @@ def test_export_import_preserves_datetime_precision():
     original_time = datetime(2024, 1, 15, 14, 30, 22, tzinfo=timezone.utc)
     task = Task(description="Test", due=original_time)
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
     parsed = Task.from_taskwarrior(exported)
 
     assert parsed.due == original_time

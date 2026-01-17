@@ -99,7 +99,7 @@ def test_task_datetime_from_string():
     assert task.due == datetime(2024, 2, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def test_task_export_dict():
+def test_task_to_taskwarrior():
     """Test exporting task to dict."""
     task = Task(
         description="Test task",
@@ -108,7 +108,7 @@ def test_task_export_dict():
         priority=Priority.HIGH,
     )
 
-    data = task.export_dict()
+    data = task.to_taskwarrior()
 
     assert data["description"] == "Test task"
     assert data["project"] == "test"
@@ -119,10 +119,10 @@ def test_task_export_dict():
     assert "modified" in data
 
 
-def test_task_export_dict_exclude_none():
+def test_task_to_taskwarrior_exclude_none():
     """Test that None fields are excluded from export."""
     task = Task(description="Test task")
-    data = task.export_dict(exclude_none=True)
+    data = task.to_taskwarrior(exclude_none=True)
 
     assert "due" not in data
     assert "scheduled" not in data
@@ -137,7 +137,7 @@ def test_task_export_datetime_format():
         entry=datetime(2024, 1, 15, 14, 30, 22, tzinfo=timezone.utc),
     )
 
-    data = task.export_dict()
+    data = task.to_taskwarrior()
     assert data["entry"] == "20240115T143022Z"
 
 
@@ -147,14 +147,14 @@ def test_task_export_depends_format():
     uuid2 = UUID("87654321-4321-8765-4321-876543218765")
     task = Task(description="Test task", depends=[uuid1, uuid2])
 
-    data = task.export_dict()
+    data = task.to_taskwarrior()
     assert data["depends"] == "12345678-1234-5678-1234-567812345678,87654321-4321-8765-4321-876543218765"
 
 
 def test_task_export_empty_depends():
     """Test that empty depends list is excluded."""
     task = Task(description="Test task", depends=[])
-    data = task.export_dict(exclude_none=True)
+    data = task.to_taskwarrior(exclude_none=True)
 
     assert "depends" not in data
 

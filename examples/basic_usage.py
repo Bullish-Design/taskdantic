@@ -54,7 +54,7 @@ def create_new_task() -> AgileTask:
 
 def export_to_taskwarrior(task: AgileTask) -> None:
     """Export task to JSON format for Taskwarrior import."""
-    task_json = json.dumps(task.export_dict())
+    task_json = json.dumps(task.to_taskwarrior())
     print("Export for Taskwarrior:")
     print(task_json)
     print("\nTo import: echo '<json>' | task import -")
