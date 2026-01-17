@@ -22,9 +22,3 @@ __all__ = [
     "load_tasks",
     "export_tasks",
 ]
-
-
-# Optional startup sync: if TASKRC_PATH is set, update taskrc UDAs from code.
-from taskdantic.uda_sync import auto_sync_taskrc_from_env as _auto_sync_taskrc_from_env
-
-_auto_sync_taskrc_from_env()
