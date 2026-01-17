@@ -1,98 +1,78 @@
 # src/taskdantic/utils.py
-
 from __future__ import annotations
 
-import json
-from typing import Any
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
-from taskdantic.exceptions import ValidationError
-from taskdantic.models import Task
+if TYPE_CHECKING:
+    from taskdantic.models import Task
 
 
-def parse_task_export(json_output: str) -> list[Task]:
-    """Parse JSON output from 'task export' command into Task objects.
+def taskwarrior_to_datetime(tw_timestamp: str) -> datetime:
+    """
+    Convert Taskwarrior timestamp (YYYYMMDDTHHmmssZ) to datetime object.
 
     Args:
-        json_output: JSON string from task export command
+        tw_timestamp: Taskwarrior timestamp string
 
     Returns:
-        List of Task objects
+        Timezone-aware datetime in UTC
 
     Raises:
-        ValueError: If JSON is invalid or not an array
-        ValidationError: If task validation fails
+        ValueError: If timestamp format is invalid
     """
-    if not json_output or json_output.strip() == "":
-        return []
-
-    try:
-        data = json.loads(json_output)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON from task export: {e}") from e
-
-    if not isinstance(data, list):
-        raise ValueError("Expected JSON array from task export")
-
-    tasks = []
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        try:
-            task = Task.model_validate(item)
-            tasks.append(task)
-        except Exception as e:
-            raise ValidationError(f"Failed to parse task: {e}") from e
-
-    return tasks
+    return datetime.strptime(tw_timestamp, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
 
 
-def task_to_json(task: Task) -> str:
-    """Convert Task to JSON string for 'task import'."""
-    data = task.model_dump(
-        mode="json",
-        exclude_none=True,
-        exclude={"id", "urgency"},
-        by_alias=True,
-    )
-    return json.dumps(data)
-
-
-def format_filter(filter_spec: str | dict[str, Any]) -> str:
-    """Format filter specification for task command.
+def datetime_to_taskwarrior(dt: datetime) -> str:
+    """
+    Convert datetime object to Taskwarrior timestamp format.
 
     Args:
-        filter_spec: Either a string filter or dict of key-value pairs
+        dt: Datetime to convert (naive datetimes treated as UTC)
 
     Returns:
-        Formatted filter string for task command
-
-    Notes:
-        - Tags are prefixed with + (e.g., {"tags": "urgent"} -> "+urgent")
-        - None values output as "key:" (e.g., {"project": None} -> "project:")
+        Taskwarrior timestamp string (YYYYMMDDTHHmmssZ)
     """
-    if isinstance(filter_spec, str):
-        return filter_spec
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
-    parts = []
-    for key, value in filter_spec.items():
-        if value is None:
-            parts.append(f"{key}:")
-            continue
 
-        if key == "tags":
-            if isinstance(value, list):
-                for tag in value:
-                    parts.append(f"+{tag}")
-            else:
-                parts.append(f"+{value}")
-            continue
+def load_tasks(json_data: list[dict[str, Any]]) -> list[Task]:
+    """
+    Load multiple tasks from Taskwarrior export JSON.
 
-        if isinstance(value, bool):
-            parts.append(f"{key}:{str(value).lower()}")
-        elif isinstance(value, list):
-            for item in value:
-                parts.append(f"{key}:{item}")
-        else:
-            parts.append(f"{key}:{value}")
+    Args:
+        json_data: List of task dictionaries from Taskwarrior
 
-    return " ".join(parts)
+    Returns:
+        List of validated Task instances
+
+    Example:
+        >>> import json
+        >>> with open("tasks.json") as f:
+        ...     data = json.load(f)
+        >>> tasks = load_tasks(data)
+    """
+    from taskdantic.models import Task
+
+    return [Task.from_taskwarrior(task_data) for task_data in json_data]
+
+
+def export_tasks(tasks: list[Task], exclude_none: bool = True) -> list[dict[str, Any]]:
+    """
+    Export multiple tasks to Taskwarrior JSON format.
+
+    Args:
+        tasks: List of Task instances to export
+        exclude_none: Whether to exclude None values from output
+
+    Returns:
+        List of task dictionaries in Taskwarrior format
+
+    Example:
+        >>> tasks = [Task(description="Task 1"), Task(description="Task 2")]
+        >>> data = export_tasks(tasks)
+    """
+    return [task.to_taskwarrior(exclude_none=exclude_none) for task in tasks]
