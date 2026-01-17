@@ -17,7 +17,7 @@ sys.path.insert(0, root_path)
 
 from pydantic import Field, field_validator
 
-from taskdantic import Priority, Status, Task
+from taskdantic import Priority, Status, Task, TWDatetime, TWDuration
 
 
 # Define your custom Task types with UDAs as Pydantic fields
@@ -26,8 +26,8 @@ class AgileTask(Task):
 
     sprint: str | None = None
     points: int = 0
-    estimate: timedelta | None = None
-    reviewed: datetime | None = None
+    estimate: TWDuration | None = None
+    reviewed: TWDatetime | None = None
 
     @field_validator("sprint")
     @classmethod
@@ -50,7 +50,7 @@ class DevOpsTask(Task):
     """Task for deployment tracking."""
 
     environment: str | None = Field(default=None, pattern="^(dev|staging|prod)$")
-    deployment_time: datetime | None = None
+    deployment_time: TWDatetime | None = None
     rollback_safe: bool = True
 
 
@@ -236,7 +236,7 @@ def custom_inheritance() -> None:
     class TrackedTask(Task):
         """Base task with time tracking."""
 
-        time_spent: timedelta | None = None
+        time_spent: TWDuration | None = None
 
     class TrackedAgileTask(TrackedTask):
         """Agile task with time tracking."""

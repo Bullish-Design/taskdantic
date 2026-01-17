@@ -92,7 +92,7 @@ The model is designed to work well with Taskwarrior’s JSON:
 
 An annotation includes:
 
-- `entry: datetime` (Taskwarrior timestamp)
+- `entry: TWDatetime` (Taskwarrior timestamp)
 - `description: str`
 
 ## User Defined Attributes (UDAs)
