@@ -157,3 +157,35 @@ def test_task_export_empty_depends():
     data = task.export_dict(exclude_none=True)
 
     assert "depends" not in data
+
+
+def test_task_core_field_constants():
+    """Ensure core field constants match core_field_names."""
+    expected = {
+        "uuid",
+        "description",
+        "status",
+        "entry",
+        "modified",
+        "due",
+        "scheduled",
+        "start",
+        "end",
+        "wait",
+        "until",
+        "project",
+        "tags",
+        "priority",
+        "annotations",
+        "depends",
+    }
+
+    assert Task.CORE_FIELDS == expected
+    assert Task.core_field_names() == expected
+
+
+def test_task_get_udas_excludes_core_and_computed():
+    """Ensure UDAs exclude core and computed Taskwarrior fields."""
+    task = Task(description="Test task", custom="value", id=5, urgency=12.5)
+
+    assert task.get_udas() == {"custom": "value"}

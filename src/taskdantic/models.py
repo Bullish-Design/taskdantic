@@ -37,50 +37,7 @@ class Annotation(BaseModel):
     description: str = Field(min_length=1)
 
 
-class CoreTaskFields(BaseModel):
-    """Core task identification and status fields."""
-
-    model_config = ConfigDict(extra="allow", validate_assignment=True)
-
-    uuid: UUID = Field(default_factory=uuid4)
-    description: str = Field(min_length=1)
-    status: Status = Status.PENDING
-
-    @field_serializer("uuid")
-    def serialize_uuid(self, value: UUID) -> str:
-        """Serialize UUID to string for Taskwarrior."""
-        return str(value)
-
-
-class TimestampFields(BaseModel):
-    """Task timestamp fields."""
-
-    entry: TWDatetime = Field(default_factory=_utc_now)
-    modified: TWDatetime = Field(default_factory=_utc_now)
-    due: TWDatetime | None = None
-    scheduled: TWDatetime | None = None
-    start: TWDatetime | None = None
-    end: TWDatetime | None = None
-    wait: TWDatetime | None = None
-    until: TWDatetime | None = None
-
-
-class OrganizationFields(BaseModel):
-    """Task organization fields (project, tags, priority)."""
-
-    project: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    priority: Priority | None = None
-
-
-class RelationshipFields(BaseModel):
-    """Task relationship fields (annotations, dependencies)."""
-
-    annotations: list[Annotation] = Field(default_factory=list)
-    depends: UUIDList = Field(default_factory=list)
-
-
-class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFields):
+class Task(BaseModel):
     """
     Pydantic model for Taskwarrior task format.
 
@@ -104,8 +61,28 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
         )
     """
 
-    # Core taskwarrior field names for filtering computed fields
-    _COMPUTED_FIELDS_TO_IGNORE: ClassVar[set[str]] = {
+    model_config = ConfigDict(extra="allow", validate_assignment=True)
+
+    CORE_FIELDS: ClassVar[set[str]] = {
+        "uuid",
+        "description",
+        "status",
+        "entry",
+        "modified",
+        "due",
+        "scheduled",
+        "start",
+        "end",
+        "wait",
+        "until",
+        "project",
+        "tags",
+        "priority",
+        "annotations",
+        "depends",
+    }
+
+    COMPUTED_FIELDS: ClassVar[set[str]] = {
         "id",
         "urgency",
         "mask",
@@ -113,6 +90,28 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
         "parent",
         "recur",
     }
+
+    uuid: UUID = Field(default_factory=uuid4)
+    description: str = Field(min_length=1)
+    status: Status = Status.PENDING
+    entry: TWDatetime = Field(default_factory=_utc_now)
+    modified: TWDatetime = Field(default_factory=_utc_now)
+    due: TWDatetime | None = None
+    scheduled: TWDatetime | None = None
+    start: TWDatetime | None = None
+    end: TWDatetime | None = None
+    wait: TWDatetime | None = None
+    until: TWDatetime | None = None
+    project: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    priority: Priority | None = None
+    annotations: list[Annotation] = Field(default_factory=list)
+    depends: UUIDList = Field(default_factory=list)
+
+    @field_serializer("uuid")
+    def serialize_uuid(self, value: UUID) -> str:
+        """Serialize UUID to string for Taskwarrior."""
+        return str(value)
 
     @model_validator(mode="after")
     def validate_business_rules(self) -> Task:
@@ -304,33 +303,23 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
 
     # UDA methods
 
-    # These classes define Task's "core" schema. Subclasses add UDAs on top.
-    _CORE_FIELD_PROVIDERS: ClassVar[tuple[type[BaseModel], ...]] = (
-        CoreTaskFields,
-        TimestampFields,
-        OrganizationFields,
-        RelationshipFields,
-    )
-
     @classmethod
     def core_field_names(cls) -> set[str]:
         """
         Return the stable set of Task core field names (excluding subclass UDAs).
-
-        This is intentionally derived from the mixins that define Task's base schema,
-        so it does NOT grow when a subclass adds fields.
         """
-        names: set[str] = set()
-        for provider in cls._CORE_FIELD_PROVIDERS:
-            names.update(provider.model_fields.keys())
-        return names
+        return set(cls.CORE_FIELDS)
 
     @classmethod
     def is_core_field(cls, name: str) -> bool:
         """
         Return True if `name` is part of the Task core schema or a computed field.
         """
-        return name in cls.core_field_names() or name in cls.model_computed_fields
+        return (
+            name in cls.core_field_names()
+            or name in cls.model_computed_fields
+            or name in cls.COMPUTED_FIELDS
+        )
 
     def get_udas(self) -> dict[str, Any]:
         """
@@ -341,12 +330,16 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
           - extra fields allowed by `extra="allow"` on the base model config.
         """
         core = self.__class__.core_field_names()
-        computed = set(self.__class__.model_computed_fields.keys())
+        computed = set(self.__class__.model_computed_fields.keys()).union(self.__class__.COMPUTED_FIELDS)
 
         # Dump without computed fields so they don't get misclassified as UDAs.
         all_data = self.model_dump(exclude=computed)
 
-        return {k: v for k, v in all_data.items() if k not in core and not k.startswith("_")}
+        return {
+            k: v
+            for k, v in all_data.items()
+            if k not in core and k not in self.__class__.COMPUTED_FIELDS and not k.startswith("_")
+        }
 
     def model_dump_udas(self, exclude_none: bool = True) -> dict[str, Any]:
         """
@@ -359,7 +352,11 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
         data = self.to_taskwarrior(exclude_none=exclude_none)
         core = self.__class__.core_field_names()
 
-        return {k: v for k, v in data.items() if k not in core and not k.startswith("_")}
+        return {
+            k: v
+            for k, v in data.items()
+            if k not in core and k not in self.__class__.COMPUTED_FIELDS and not k.startswith("_")
+        }
 
     @property
     def uda_names(self) -> list[str]:
@@ -453,5 +450,5 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
             >>> task_dict = {"description": "Test", "status": "pending", ...}
             >>> task = Task.from_taskwarrior(task_dict)
         """
-        clean_data = {k: v for k, v in data.items() if k not in cls._COMPUTED_FIELDS_TO_IGNORE}
+        clean_data = {k: v for k, v in data.items() if k not in cls.COMPUTED_FIELDS}
         return cls.model_validate(clean_data)
