@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from pydantic import Field
 
-from taskdantic import Task, TWDuration, TWDatetime
+from taskdantic import Task, TWDuration, TWDatetime, uda
 
 
 class Sprint(str, Enum):
@@ -17,31 +17,29 @@ class Sprint(str, Enum):
 class AgileTask(Task):
     sprint: Sprint | None = Field(
         default=None,
-        json_schema_extra={"taskwarrior": {"label": "Sprint"}},
+        json_schema_extra=uda(label="Sprint"),
     )
 
     points: int = Field(
         default=0,
-        json_schema_extra={"taskwarrior": {"label": "Points"}},
+        json_schema_extra=uda(label="Points"),
     )
 
     estimate: TWDuration | None = Field(
         default=None,
-        json_schema_extra={"taskwarrior": {"label": "Estimate"}},
+        json_schema_extra=uda(label="Estimate"),
     )
 
     reviewed: TWDatetime | None = Field(
         default=None,
-        json_schema_extra={"taskwarrior": {"label": "Reviewed"}},
+        json_schema_extra=uda(label="Reviewed"),
     )
 
     stage: Literal["todo", "doing", "done"] | None = Field(
         default=None,
-        json_schema_extra={
-            "taskwarrior": {
-                "label": "Stage",
-                "values": ["todo", "doing", "done"],
-                "urgency": {"doing": 2.0, "done": -1.0},
-            }
-        },
+        json_schema_extra=uda(
+            label="Stage",
+            values=["todo", "doing", "done"],
+            urgency={"doing": 2.0, "done": -1.0},
+        ),
     )
