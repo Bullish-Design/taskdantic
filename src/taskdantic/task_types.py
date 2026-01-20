@@ -1,4 +1,4 @@
-# src/taskdantic/types.py
+# src/taskdantic/task_types.py
 from __future__ import annotations
 
 from datetime import datetime, timedelta
