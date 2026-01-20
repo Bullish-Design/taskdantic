@@ -6,7 +6,7 @@ import sys
 import warnings
 from pathlib import Path
 from taskdantic.uda_discovery import discover_task_models, import_task_modules_from_dir
-from taskdantic.uda_export import extract_uda_specs, merge_uda_specs, render_taskrc_udas
+from taskdantic.uda_registry import UDARegistry
 from taskdantic.uda_taskrc import (
     parse_existing_uda_names as _parse_existing_uda_names,
     upsert_uda_block as _upsert_uda_block,
@@ -49,8 +49,8 @@ def sync_taskrc_udas(taskrc_path: str, tasks_root: str | None = None, *, strict:
     existing = _parse_existing_uda_names(original)
 
     models = discover_task_models(imported_modules)
-    spec_map = merge_uda_specs(extract_uda_specs(m) for m in models)
-    generated_names = set(spec_map.keys())
+    registry = UDARegistry.from_task_models(models)
+    generated_names = set(registry.specs.keys())
 
     missing_in_code = existing - generated_names
     if missing_in_code:
@@ -59,7 +59,7 @@ def sync_taskrc_udas(taskrc_path: str, tasks_root: str | None = None, *, strict:
             raise ValueError(msg)
         print(msg, file=sys.stderr)
 
-    block_body = render_taskrc_udas(spec_map.values())
+    block_body = registry.taskrc_block()
     updated = _upsert_uda_block(original, block_body)
 
     if updated != original:
