@@ -9,6 +9,7 @@ from taskdantic.services import TaskService
 from taskdantic.task_types import TWDatetime, TWDuration, UUIDList
 from taskdantic.uda import uda
 from taskdantic.uda_mixins import AgileUDAMixin, BugTrackingUDAMixin, FinanceUDAMixin, UDAMixin
+from taskdantic.uda_registry import UDARegistry
 from taskdantic.utils import export_tasks, load_tasks
 
 
@@ -30,6 +31,7 @@ __all__ = [
     "AgileUDAMixin",
     "BugTrackingUDAMixin",
     "FinanceUDAMixin",
+    "UDARegistry",
     "uda",
     "load_tasks",
     "export_tasks",
