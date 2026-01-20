@@ -11,10 +11,6 @@ from typing import Iterable
 from taskdantic.models import Task
 from taskdantic.uda_export import extract_uda_specs, merge_uda_specs, render_taskrc_udas
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 BEGIN_MARKER = "# BEGIN TASKDANTIC UDAS"
 END_MARKER = "# END TASKDANTIC UDAS"
 
