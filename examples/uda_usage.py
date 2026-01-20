@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 root_path = str(Path(__file__).parent.parent / "src")
@@ -77,7 +77,7 @@ def export_import() -> None:
         estimate=timedelta(hours=10),
     )
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
     print("Exported JSON:")
     print(json.dumps(exported, indent=2, default=str))
 

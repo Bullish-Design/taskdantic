@@ -48,7 +48,7 @@ task = Task(
 )
 
 # Dict suitable for JSON encoding and piping to `task import -`
-payload = task.export_dict()
+payload = task.to_taskwarrior()
 ```
 
 ### Parse Taskwarrior `task export` output
@@ -85,14 +85,14 @@ print(tasks[0].description, tasks[0].status)
 The model is designed to work well with Taskwarrior’s JSON:
 
 - Incoming Taskwarrior timestamps (e.g. `"20240115T143022Z"`) are parsed to `datetime` in UTC.
-- When exporting (`export_dict()`), datetimes are serialized back to Taskwarrior timestamps.
+- When exporting (`to_taskwarrior()`), datetimes are serialized back to Taskwarrior timestamps.
 - Dependencies serialize to the comma-separated string Taskwarrior expects (e.g. `"uuid1,uuid2"`).
 
 ### Annotation
 
 An annotation includes:
 
-- `entry: datetime` (Taskwarrior timestamp)
+- `entry: TWDatetime` (Taskwarrior timestamp)
 - `description: str`
 
 ## User Defined Attributes (UDAs)
@@ -109,9 +109,9 @@ For Taskwarrior-specific formats, use the custom field types:
 ### Quick start
 
 ```python
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
-from taskdantic import Priority, Task, TWDatetime, TWDuration
+from taskdantic import Priority, Task, TWDatetime, TWDuration, uda
 
 
 class AgileTask(Task):
@@ -119,6 +119,7 @@ class AgileTask(Task):
     points: int = 0
     estimate: TWDuration | None = None
     reviewed: TWDatetime | None = None
+    external_id: str | None = Field(default=None, json_schema_extra=uda(label="External ID"))
 
     @field_validator("sprint")
     @classmethod
@@ -138,6 +139,33 @@ task = AgileTask(
 )
 ```
 
+### `uda()` marker metadata
+
+Use `uda()` to declare Taskwarrior metadata (labels, types, values, urgency) alongside your Pydantic fields:
+
+```python
+from pydantic import Field
+
+from taskdantic import Task, uda
+
+
+class ExpenseTask(Task):
+    cost_center: str | None = Field(default=None, json_schema_extra=uda(label="Cost Center"))
+    billable: str | None = Field(default=None, json_schema_extra=uda(label="Billable", values=["yes", "no"]))
+```
+
+### UDA mixins
+
+Taskdantic ships with reusable mixins to keep common UDA fields consistent across task models:
+
+```python
+from taskdantic import AgileUDAMixin, Task
+
+
+class SprintTask(AgileUDAMixin, Task):
+    pass
+```
+
 ### Custom field types
 
 #### TWDatetime (Taskwarrior timestamps)
@@ -151,7 +179,7 @@ class MyTask(Task):
 
 
 task = MyTask(description="Test", reviewed="20240120T100000Z")
-exported = task.export_dict()
+exported = task.to_taskwarrior()
 # reviewed -> "20240120T100000Z"
 ```
 
@@ -166,7 +194,7 @@ class MyTask(Task):
 
 
 task = MyTask(description="Test", estimate="PT2H30M")
-exported = task.export_dict()
+exported = task.to_taskwarrior()
 # estimate -> "PT2H30M"
 ```
 
@@ -181,7 +209,7 @@ class MyTask(Task):
 
 
 task = MyTask(description="Test", blocked_by="uuid1,uuid2")
-exported = task.export_dict()
+exported = task.to_taskwarrior()
 # blocked_by -> "uuid1,uuid2"
 ```
 
@@ -266,7 +294,7 @@ task = AgileTask(
     reviewed=datetime(2024, 1, 20, 10, 0, 0, tzinfo=timezone.utc),
 )
 
-exported = task.export_dict()
+exported = task.to_taskwarrior()
 imported = AgileTask.from_taskwarrior(exported)
 
 assert imported.sprint == "Sprint 25"
@@ -310,7 +338,7 @@ task = AgileTask.from_taskwarrior(data)
 
 ## API
 
-### `Task.export_dict(exclude_none: bool = True) -> dict[str, Any]`
+### `Task.to_taskwarrior(exclude_none: bool = True) -> dict[str, Any]`
 
 Exports a JSON-ready dictionary intended for Taskwarrior import. By default, fields set to `None` are omitted.
 
@@ -318,6 +346,29 @@ Exports a JSON-ready dictionary intended for Taskwarrior import. By default, fie
 
 Parses one task object from `task export`. Taskwarrior export may include computed fields such as `id` and `urgency`;
 these are ignored during parsing.
+
+### `TaskService`
+
+`TaskService` provides helpers for common task lifecycle operations.
+
+```python
+from taskdantic import Task, TaskService
+
+service = TaskService()
+task = Task(description="Ship release")
+
+service.start(task)
+service.tag(task, "release")
+service.complete(task)
+```
+
+## CLI
+
+Sync Taskwarrior UDAs into a taskrc file:
+
+```bash
+taskdantic sync --taskrc ~/.taskrc --tasks-root ./tasks
+```
 
 ## Notes and limitations
 

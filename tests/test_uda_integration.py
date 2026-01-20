@@ -81,7 +81,7 @@ def test_full_agile_workflow():
     assert total_points == 16
     assert total_estimate == timedelta(hours=12)
 
-    exported_tasks = [t.export_dict() for t in tasks]
+    exported_tasks = [t.to_taskwarrior() for t in tasks]
     assert len(exported_tasks) == 3
     assert all("sprint" in t for t in exported_tasks)
     assert all(t["sprint"] == "Sprint 23" for t in exported_tasks)
@@ -105,7 +105,7 @@ def test_bug_tracking_workflow():
     assert bug.severity == "high"
     assert bug.status == Status.PENDING
 
-    exported = bug.export_dict()
+    exported = bug.to_taskwarrior()
     assert exported["severity"] == "high"
     assert exported["reported_by"] == "user@example.com"
 
@@ -113,7 +113,7 @@ def test_bug_tracking_workflow():
     bug.fixed_in = "v1.2.3"
     bug.end = datetime.now(timezone.utc)
 
-    exported_fixed = bug.export_dict()
+    exported_fixed = bug.to_taskwarrior()
     assert exported_fixed["status"] == "completed"
     assert exported_fixed["fixed_in"] == "v1.2.3"
 
@@ -206,7 +206,7 @@ def test_taskwarrior_import_export_compatibility():
     assert not hasattr(task, "id")
     assert not hasattr(task, "urgency")
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
 
     assert "id" not in exported
     assert "urgency" not in exported
@@ -236,7 +236,7 @@ def test_complex_uda_types_integration():
         time_spent=timedelta(hours=4, minutes=30),
     )
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
 
     assert exported["blocked_by"] == f"{blocker1_uuid},{blocker2_uuid}"
     assert exported["last_review"] == "20240120T100000Z"
@@ -303,7 +303,7 @@ def test_json_serialization_deserialization():
         reviewed=datetime(2024, 1, 20, 10, 0, 0, tzinfo=timezone.utc),
     )
 
-    exported = task.export_dict()
+    exported = task.to_taskwarrior()
     json_str = json.dumps(exported)
 
     data = json.loads(json_str)

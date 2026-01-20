@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 from taskdantic.enums import Priority, Status
-from taskdantic.types import TWDatetime, UUIDList
+from taskdantic.task_types import TWDatetime, UUIDList
 
 
 def _utc_now() -> datetime:
@@ -37,50 +37,7 @@ class Annotation(BaseModel):
     description: str = Field(min_length=1)
 
 
-class CoreTaskFields(BaseModel):
-    """Core task identification and status fields."""
-
-    model_config = ConfigDict(extra="allow", validate_assignment=True)
-
-    uuid: UUID = Field(default_factory=uuid4)
-    description: str = Field(min_length=1)
-    status: Status = Status.PENDING
-
-    @field_serializer("uuid")
-    def serialize_uuid(self, value: UUID) -> str:
-        """Serialize UUID to string for Taskwarrior."""
-        return str(value)
-
-
-class TimestampFields(BaseModel):
-    """Task timestamp fields."""
-
-    entry: TWDatetime = Field(default_factory=_utc_now)
-    modified: TWDatetime = Field(default_factory=_utc_now)
-    due: TWDatetime | None = None
-    scheduled: TWDatetime | None = None
-    start: TWDatetime | None = None
-    end: TWDatetime | None = None
-    wait: TWDatetime | None = None
-    until: TWDatetime | None = None
-
-
-class OrganizationFields(BaseModel):
-    """Task organization fields (project, tags, priority)."""
-
-    project: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    priority: Priority | None = None
-
-
-class RelationshipFields(BaseModel):
-    """Task relationship fields (annotations, dependencies)."""
-
-    annotations: list[Annotation] = Field(default_factory=list)
-    depends: UUIDList = Field(default_factory=list)
-
-
-class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFields):
+class Task(BaseModel):
     """
     Pydantic model for Taskwarrior task format.
 
@@ -104,8 +61,29 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
         )
     """
 
-    # Core taskwarrior field names for filtering computed fields
-    _COMPUTED_FIELDS_TO_IGNORE: ClassVar[set[str]] = {
+    model_config = ConfigDict(extra="allow", validate_assignment=True)
+
+    CORE_FIELD_ORDER: ClassVar[tuple[str, ...]] = (
+        "uuid",
+        "description",
+        "status",
+        "entry",
+        "modified",
+        "due",
+        "scheduled",
+        "start",
+        "end",
+        "wait",
+        "until",
+        "project",
+        "tags",
+        "priority",
+        "annotations",
+        "depends",
+    )
+    CORE_FIELDS: ClassVar[set[str]] = set(CORE_FIELD_ORDER)
+
+    COMPUTED_FIELDS: ClassVar[set[str]] = {
         "id",
         "urgency",
         "mask",
@@ -113,6 +91,28 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
         "parent",
         "recur",
     }
+
+    uuid: UUID = Field(default_factory=uuid4)
+    description: str = Field(min_length=1)
+    status: Status = Status.PENDING
+    entry: TWDatetime = Field(default_factory=_utc_now)
+    modified: TWDatetime = Field(default_factory=_utc_now)
+    due: TWDatetime | None = None
+    scheduled: TWDatetime | None = None
+    start: TWDatetime | None = None
+    end: TWDatetime | None = None
+    wait: TWDatetime | None = None
+    until: TWDatetime | None = None
+    project: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    priority: Priority | None = None
+    annotations: list[Annotation] = Field(default_factory=list)
+    depends: UUIDList = Field(default_factory=list)
+
+    @field_serializer("uuid")
+    def serialize_uuid(self, value: UUID) -> str:
+        """Serialize UUID to string for Taskwarrior."""
+        return str(value)
 
     @model_validator(mode="after")
     def validate_business_rules(self) -> Task:
@@ -167,156 +167,62 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
         delta = self.due - _utc_now()
         return delta.total_seconds() / 86400
 
-    # Business logic methods
-
-    def complete(self) -> None:
-        """
-        Mark task as completed.
-
-        Raises:
-            ValueError: If task is deleted or already completed
-        """
-        if self.status == Status.DELETED:
-            raise ValueError("Cannot complete deleted task")
-        if self.status == Status.COMPLETED:
-            raise ValueError("Task is already completed")
-
-        self.status = Status.COMPLETED
-        self.end = _utc_now()
-        self.modified = _utc_now()
-
-    def start_task(self) -> None:
-        """
-        Start the task by setting start timestamp.
-
-        Raises:
-            ValueError: If task is not pending
-        """
-        if self.status != Status.PENDING:
-            raise ValueError(f"Cannot start task with status: {self.status.value}")
-        if self.start is not None:
-            raise ValueError("Task is already started")
-
-        self.start = _utc_now()
-        self.modified = _utc_now()
-
-    def stop_task(self) -> None:
-        """
-        Stop the task by clearing start timestamp.
-
-        Raises:
-            ValueError: If task is not started
-        """
-        if self.start is None:
-            raise ValueError("Task is not started")
-
-        self.start = None
-        self.modified = _utc_now()
-
-    def delete(self) -> None:
-        """
-        Mark task as deleted.
-
-        Raises:
-            ValueError: If task is already deleted
-        """
-        if self.status == Status.DELETED:
-            raise ValueError("Task is already deleted")
-
-        self.status = Status.DELETED
-        self.end = _utc_now()
-        self.modified = _utc_now()
-
-    def add_dependency(self, task: Task | UUID) -> None:
-        """
-        Add a task dependency.
-
-        Args:
-            task: Task instance or UUID to depend on
-        """
-        uuid_to_add = task.uuid if isinstance(task, Task) else task
-        if uuid_to_add == self.uuid:
-            raise ValueError("Task cannot depend on itself")
-        if uuid_to_add not in self.depends:
-            self.depends.append(uuid_to_add)
-            self.modified = _utc_now()
-
-    def remove_dependency(self, task: Task | UUID) -> None:
-        """
-        Remove a task dependency.
-
-        Args:
-            task: Task instance or UUID to remove from dependencies
-        """
-        uuid_to_remove = task.uuid if isinstance(task, Task) else task
-        if uuid_to_remove in self.depends:
-            self.depends.remove(uuid_to_remove)
-            self.modified = _utc_now()
-
-    def add_annotation(self, description: str, entry: datetime | None = None) -> None:
-        """
-        Add an annotation to the task.
-
-        Args:
-            description: Annotation text
-            entry: Annotation timestamp (defaults to now)
-        """
-        annotation = Annotation(
-            entry=entry if entry is not None else _utc_now(),
-            description=description,
-        )
-        self.annotations.append(annotation)
-        self.modified = _utc_now()
-
-    def add_tag(self, tag: str) -> None:
-        """
-        Add a tag to the task.
-
-        Args:
-            tag: Tag to add
-        """
-        if tag not in self.tags:
-            self.tags.append(tag)
-            self.modified = _utc_now()
-
-    def remove_tag(self, tag: str) -> None:
-        """
-        Remove a tag from the task.
-
-        Args:
-            tag: Tag to remove
-        """
-        if tag in self.tags:
-            self.tags.remove(tag)
-            self.modified = _utc_now()
-
-    def has_tag(self, tag: str) -> bool:
-        """
-        Check if task has a specific tag.
-
-        Args:
-            tag: Tag to check
-
-        Returns:
-            True if task has the tag
-        """
-        return tag in self.tags
-
     # UDA methods
+
+    @classmethod
+    def core_field_names(cls) -> set[str]:
+        """
+        Return the stable set of Task core field names (excluding subclass UDAs).
+        """
+        return set(cls.CORE_FIELDS)
+
+    @classmethod
+    def is_core_field(cls, name: str) -> bool:
+        """
+        Return True if `name` is part of the Task core schema or a computed field.
+        """
+        return (
+            name in cls.core_field_names()
+            or name in cls.model_computed_fields
+            or name in cls.COMPUTED_FIELDS
+        )
 
     def get_udas(self) -> dict[str, Any]:
         """
-        Return all User Defined Attributes.
+        Return all User Defined Attributes (UDAs).
 
-        Returns:
-            Dictionary of UDA field names and values
+        UDAs include:
+          - subclass-declared fields, and
+          - extra fields allowed by `extra="allow"` on the base model config.
         """
-        model_fields = set(self.model_fields.keys())
-        computed_fields = set(self.model_computed_fields.keys())
-        core_fields = model_fields | computed_fields
+        core = self.__class__.core_field_names()
+        computed = set(self.__class__.model_computed_fields.keys()).union(self.__class__.COMPUTED_FIELDS)
 
-        all_data = self.model_dump()
-        return {k: v for k, v in all_data.items() if k not in core_fields and not k.startswith("_")}
+        # Dump without computed fields so they don't get misclassified as UDAs.
+        all_data = self.model_dump(exclude=computed)
+
+        return {
+            k: v
+            for k, v in all_data.items()
+            if k not in core and k not in self.__class__.COMPUTED_FIELDS and not k.startswith("_")
+        }
+
+    def model_dump_udas(self, exclude_none: bool = True) -> dict[str, Any]:
+        """
+        Dump only UDAs, using the same serialization rules as `to_taskwarrior()`.
+
+        This returns Taskwarrior-ready values (e.g., TWDatetime serialized to strings,
+        UUIDList serialized to comma-separated strings, etc.), consistent with
+        `to_taskwarrior()`. :contentReference[oaicite:2]{index=2}
+        """
+        data = self.to_taskwarrior(exclude_none=exclude_none)
+        core = self.__class__.core_field_names()
+
+        return {
+            k: v
+            for k, v in data.items()
+            if k not in core and k not in self.__class__.COMPUTED_FIELDS and not k.startswith("_")
+        }
 
     @property
     def uda_names(self) -> list[str]:
@@ -349,17 +255,29 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
 
         return data
 
-    def export_dict(self, exclude_none: bool = True) -> dict[str, Any]:
+    def normalized_for_prompt(self, *, max_annotations: int = 5) -> dict[str, Any]:
         """
-        Export task to dictionary (backward compatibility alias for to_taskwarrior).
+        Return a prompt-stable representation of task data.
 
-        Args:
-            exclude_none: Whether to exclude None values from output
-
-        Returns:
-            Dictionary in Taskwarrior JSON format
+        Ensures a stable core-field ordering, truncates annotations, and appends
+        UDAs in sorted key order using Taskwarrior serialization.
         """
-        return self.to_taskwarrior(exclude_none=exclude_none)
+        data = self.to_taskwarrior(exclude_none=True)
+        normalized: dict[str, Any] = {}
+
+        for key in self.__class__.CORE_FIELD_ORDER:
+            if key not in data:
+                continue
+            value = data[key]
+            if key == "annotations" and isinstance(value, list) and max_annotations >= 0:
+                value = value[:max_annotations]
+            normalized[key] = value
+
+        uda_data = self.model_dump_udas(exclude_none=True)
+        for key in sorted(uda_data.keys()):
+            normalized[key] = uda_data[key]
+
+        return normalized
 
     def to_json(self, **kwargs: Any) -> str:
         """
@@ -410,5 +328,5 @@ class Task(CoreTaskFields, TimestampFields, OrganizationFields, RelationshipFiel
             >>> task_dict = {"description": "Test", "status": "pending", ...}
             >>> task = Task.from_taskwarrior(task_dict)
         """
-        clean_data = {k: v for k, v in data.items() if k not in cls._COMPUTED_FIELDS_TO_IGNORE}
+        clean_data = {k: v for k, v in data.items() if k not in cls.COMPUTED_FIELDS}
         return cls.model_validate(clean_data)
