@@ -63,7 +63,7 @@ class Task(BaseModel):
 
     model_config = ConfigDict(extra="allow", validate_assignment=True)
 
-    CORE_FIELDS: ClassVar[set[str]] = {
+    CORE_FIELD_ORDER: ClassVar[tuple[str, ...]] = (
         "uuid",
         "description",
         "status",
@@ -80,7 +80,8 @@ class Task(BaseModel):
         "priority",
         "annotations",
         "depends",
-    }
+    )
+    CORE_FIELDS: ClassVar[set[str]] = set(CORE_FIELD_ORDER)
 
     COMPUTED_FIELDS: ClassVar[set[str]] = {
         "id",
@@ -253,6 +254,30 @@ class Task(BaseModel):
             data = {k: v for k, v in data.items() if v is not None}
 
         return data
+
+    def normalized_for_prompt(self, *, max_annotations: int = 5) -> dict[str, Any]:
+        """
+        Return a prompt-stable representation of task data.
+
+        Ensures a stable core-field ordering, truncates annotations, and appends
+        UDAs in sorted key order using Taskwarrior serialization.
+        """
+        data = self.to_taskwarrior(exclude_none=True)
+        normalized: dict[str, Any] = {}
+
+        for key in self.__class__.CORE_FIELD_ORDER:
+            if key not in data:
+                continue
+            value = data[key]
+            if key == "annotations" and isinstance(value, list) and max_annotations >= 0:
+                value = value[:max_annotations]
+            normalized[key] = value
+
+        uda_data = self.model_dump_udas(exclude_none=True)
+        for key in sorted(uda_data.keys()):
+            normalized[key] = uda_data[key]
+
+        return normalized
 
     def to_json(self, **kwargs: Any) -> str:
         """
