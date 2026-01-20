@@ -3,42 +3,31 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 from pathlib import Path
 from taskdantic.uda_discovery import discover_task_models, import_task_modules_from_dir
 from taskdantic.uda_export import extract_uda_specs, merge_uda_specs, render_taskrc_udas
-
-BEGIN_MARKER = "# BEGIN TASKDANTIC UDAS"
-END_MARKER = "# END TASKDANTIC UDAS"
-
+from taskdantic.uda_taskrc import (
+    parse_existing_uda_names as _parse_existing_uda_names,
+    upsert_uda_block as _upsert_uda_block,
+)
 
 def parse_existing_uda_names(taskrc_text: str) -> set[str]:
-    names: set[str] = set()
-    for raw in taskrc_text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("uda.") and ".type=" in line:
-            rest = line[len("uda.") :]
-            name = rest.split(".type=", 1)[0].strip()
-            if name:
-                names.add(name)
-    return names
+    warnings.warn(
+        "parse_existing_uda_names is deprecated; import from taskdantic.uda_taskrc instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _parse_existing_uda_names(taskrc_text)
 
 
 def upsert_uda_block(taskrc_text: str, block_body: str) -> str:
-    managed = (
-        f"{BEGIN_MARKER}\n# Generated from Pydantic Task models. Do not edit by hand.\n\n{block_body}\n{END_MARKER}\n"
+    warnings.warn(
+        "upsert_uda_block is deprecated; import from taskdantic.uda_taskrc instead.",
+        DeprecationWarning,
+        stacklevel=2,
     )
-
-    start = taskrc_text.find(BEGIN_MARKER)
-    end = taskrc_text.find(END_MARKER)
-    if start != -1 and end != -1 and start < end:
-        pre = taskrc_text[:start].rstrip() + "\n\n"
-        post = taskrc_text[end + len(END_MARKER) :].lstrip()
-        return pre + managed + "\n" + post
-
-    sep = "\n\n" if not taskrc_text.endswith("\n") else "\n"
-    return taskrc_text + sep + managed
+    return _upsert_uda_block(taskrc_text, block_body)
 
 
 def sync_taskrc_udas(taskrc_path: str, tasks_root: str | None = None, *, strict: bool = False) -> None:
@@ -57,7 +46,7 @@ def sync_taskrc_udas(taskrc_path: str, tasks_root: str | None = None, *, strict:
         imported_modules = None
 
     original = path.read_text(encoding="utf-8")
-    existing = parse_existing_uda_names(original)
+    existing = _parse_existing_uda_names(original)
 
     models = discover_task_models(imported_modules)
     spec_map = merge_uda_specs(extract_uda_specs(m) for m in models)
@@ -71,7 +60,7 @@ def sync_taskrc_udas(taskrc_path: str, tasks_root: str | None = None, *, strict:
         print(msg, file=sys.stderr)
 
     block_body = render_taskrc_udas(spec_map.values())
-    updated = upsert_uda_block(original, block_body)
+    updated = _upsert_uda_block(original, block_body)
 
     if updated != original:
         tmp = path.with_suffix(path.suffix + ".tmp")
