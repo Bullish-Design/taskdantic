@@ -25,6 +25,20 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def parse_depends_flexible(value: str | None) -> list[str]:
+    """
+    Parse TaskMan-style depends strings without UUID coercion.
+
+    TaskMan workflows often store lightweight, human-entered dependency tokens
+    (for example, short IDs or labels) instead of strict UUIDs. This helper
+    keeps those tokens intact while still normalizing comma-separated input.
+    """
+    if value is None:
+        return []
+
+    return [token.strip() for token in value.split(",") if token.strip()]
+
+
 class Annotation(BaseModel):
     """Task annotation with timestamp."""
 

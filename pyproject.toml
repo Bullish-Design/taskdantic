@@ -20,6 +20,10 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv.extra-build-dependencies]
+taskdantic = ["hatchling"]
+
+
 [project.scripts]
 taskdantic = "taskdantic.cli:cli"
 
