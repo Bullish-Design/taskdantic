@@ -16,7 +16,7 @@ from taskdantic.utils import export_tasks, load_tasks
 try:
     __version__ = version("taskdantic")
 except PackageNotFoundError:  # pragma: no cover - fallback for editable installs without metadata
-    __version__ = "0.1.2"
+    __version__ = "0.1.3"
 
 __all__ = [
     "Task",
