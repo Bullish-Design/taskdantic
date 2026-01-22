@@ -9,7 +9,7 @@ __pycache__/
 #.tmuxp.yaml
 .python-version
 #devenv.lock
-uv.lock
+#uv.lock
 .devenv.flake.nix
 
 
