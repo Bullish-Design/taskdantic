@@ -1,6 +1,6 @@
 [project]
 name = "taskdantic"
-version = "0.1.7"
+version = "0.1.8"
 description = "Pydantic models for Taskwarrior JSON format"
 requires-python = ">=3.11"
 dependencies = [
@@ -17,7 +17,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.10.0"]
+requires = ["uv_build>=0.9.24,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.extra-build-dependencies]
